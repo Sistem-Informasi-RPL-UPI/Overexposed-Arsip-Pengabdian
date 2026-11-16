@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===== Modul 7: Data Tridarma Dosen =====
+
+enum SyncStatus {
+  IN_PROGRESS
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum PublikasiSource {
+  sinta_scopus
+  sinta_garuda
+  sinta_googlescholar
+  sinta_rama
+}
+
+enum JenisKegiatan {
+  penelitian
+  pengabdian
+}
+
+enum PeranKegiatan {
+  ketua
+  anggota
+}
+
+enum Semester {
+  Ganjil
+  Genap
+}
+
+enum JenisBerkas {
+  RPS
+  Slide
+  UTS
+  UAS
+  Kuis
+  Presensi
+  Nilai
+  Modul
+}
+
+model Dosen {
+  id             Int         @id @default(autoincrement())
+  user_id        String      @unique @db.Uuid
+  sinta_id       String      @unique
+  nama           String?
+  nama_normal    String?
+  afiliasi       String?
+  departemen     String?
+  sync_status    SyncStatus?
+  last_synced_at DateTime?   @db.Timestamptz(6)
+  created_at     DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+
+  sinta_skor       SintaSkor[]
+  sinta_metrik     SintaMetrik[]
+  crawl_log        CrawlLog[]
+  publikasi_dosen  PublikasiDosen[]
+  kegiatan_anggota KegiatanAnggota[]
+  iprs_dosen       IprsDosen[]
+  buku_dosen       BukuDosen[]
+  kelas            Kelas[]
+
+  @@index([nama_normal])
+  @@map("dosen")
+}
+
+model SintaSkor {
+  dosen_id Int
+  label    String
+  nilai    Decimal @db.Decimal(14, 2)
+
+  dosen Dosen @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@id([dosen_id, label])
+  @@map("sinta_skor")
+}
+
+model SintaMetrik {
+  dosen_id Int
+  label    String
+  scopus   Int?
+  gscholar Int?
+  wos      Int?
+
+  dosen Dosen @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@id([dosen_id, label])
+  @@map("sinta_metrik")
+}
+
+model CrawlLog {
+  id          Int      @id @default(autoincrement())
+  dosen_id    Int
+  kategori    String   @db.VarChar(50)
+  jumlah_item Int      @default(0)
+  terpotong   Boolean  @default(false)
+  status      String   @db.VarChar(10)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  dosen Dosen @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@index([dosen_id, created_at])
+  @@map("crawl_log")
+}
+
+model Publikasi {
+  id         Int      @id @default(autoincrement())
+  judul_hash String   @unique @db.Char(32)
+  judul      String
+  tahun      Int?     @db.SmallInt
+  penulis    String?
+  jurnal     String?
+  sitasi     Int      @default(0)
+  link       String?
+  kuartil    String?  @db.VarChar(10)
+  jenis      String?  @db.VarChar(50)
+  penerbit   String?  @db.VarChar(200)
+  doi        String?  @db.VarChar(150)
+  akreditasi String?  @db.VarChar(50)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  publikasi_dosen PublikasiDosen[]
+
+  @@map("publikasi")
+}
+
+model PublikasiDosen {
+  publikasi_id   Int
+  dosen_id       Int
+  source         PublikasiSource
+  urutan_penulis Int?            @db.SmallInt
+  total_penulis  Int?            @db.SmallInt
+  sitasi_sumber  Int?
+  link_sumber    String?
+
+  publikasi Publikasi @relation(fields: [publikasi_id], references: [id], onDelete: Cascade)
+  dosen     Dosen     @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@id([publikasi_id, dosen_id, source])
+  @@index([dosen_id])
+  @@map("publikasi_dosen")
+}
+
+model Kegiatan {
+  id           Int           @id @default(autoincrement())
+  kunci        String        @unique @db.Char(32)
+  jenis        JenisKegiatan
+  judul        String
+  tahun        Int?          @db.SmallInt
+  skema        String?       @db.VarChar(255)
+  dana_nominal Decimal       @default(0) @db.Decimal(18, 2)
+  status       String?       @db.VarChar(30)
+  sumber_dana  String?       @db.VarChar(100)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+
+  anggota KegiatanAnggota[]
+
+  @@index([jenis, tahun])
+  @@map("kegiatan")
+}
+
+model KegiatanAnggota {
+  kegiatan_id Int
+  nama_normal String
+  nama        String
+  peran       PeranKegiatan
+  dosen_id    Int?
+
+  kegiatan Kegiatan @relation(fields: [kegiatan_id], references: [id], onDelete: Cascade)
+  dosen    Dosen?   @relation(fields: [dosen_id], references: [id], onDelete: SetNull)
+
+  @@id([kegiatan_id, nama_normal])
+  @@index([dosen_id])
+  @@index([nama_normal])
+  @@map("kegiatan_anggota")
+}
+
+model Iprs {
+  id               Int      @id @default(autoincrement())
+  kunci            String   @unique @db.Char(32)
+  judul            String
+  jenis            String?  @db.VarChar(100)
+  tahun            Int?     @db.SmallInt
+  nomor_permohonan String?  @db.VarChar(100)
+  status           String?  @db.VarChar(100)
+  pemegang         String?  @db.VarChar(255)
+  inventor         String?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  iprs_dosen IprsDosen[]
+
+  @@map("iprs")
+}
+
+model IprsDosen {
+  iprs_id  Int
+  dosen_id Int
+
+  iprs  Iprs  @relation(fields: [iprs_id], references: [id], onDelete: Cascade)
+  dosen Dosen @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@id([iprs_id, dosen_id])
+  @@index([dosen_id])
+  @@map("iprs_dosen")
+}
+
+model Buku {
+  id            Int      @id @default(autoincrement())
+  kunci         String   @unique @db.Char(32)
+  judul         String
+  kategori      String?  @db.VarChar(100)
+  penulis       String?
+  penerbit      String?  @db.VarChar(200)
+  tahun         Int?     @db.SmallInt
+  tempat_terbit String?  @db.VarChar(200)
+  isbn          String?  @db.VarChar(50)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  buku_dosen BukuDosen[]
+
+  @@map("buku")
+}
+
+model BukuDosen {
+  buku_id  Int
+  dosen_id Int
+
+  buku  Buku  @relation(fields: [buku_id], references: [id], onDelete: Cascade)
+  dosen Dosen @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  @@id([buku_id, dosen_id])
+  @@index([dosen_id])
+  @@map("buku_dosen")
+}
+
+model Matkul {
+  id   Int    @id @default(autoincrement())
+  kode String @unique
+  nama String
+  sks  Int    @db.SmallInt
+
+  kelas Kelas[]
+
+  @@map("matkul")
+}
+
+model Kelas {
+  id           Int      @id @default(autoincrement())
+  matkul_id    Int
+  dosen_id     Int
+  tahun_ajaran String
+  semester     Semester
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  matkul Matkul @relation(fields: [matkul_id], references: [id], onDelete: Restrict)
+  dosen  Dosen  @relation(fields: [dosen_id], references: [id], onDelete: Cascade)
+
+  berkas BerkasPengajaran[]
+
+  @@unique([matkul_id, dosen_id, tahun_ajaran, semester])
+  @@index([dosen_id])
+  @@map("kelas")
+}
+
+model BerkasPengajaran {
+  id         Int         @id @default(autoincrement())
+  kelas_id   Int
+  jenis      JenisBerkas
+  judul      String?
+  link       String
+  keterangan String?
+  created_at DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+
+  kelas Kelas @relation(fields: [kelas_id], references: [id], onDelete: Cascade)
+
+  @@index([kelas_id])
+  @@map("berkas_pengajaran")
+}
+
+// ===== Modul 4: Arsip Prodi =====
+
+model Kategori {
+  id                    Int      @id @default(autoincrement())
+  kode                  String   @unique @db.VarChar(20)
+  nama                  String
+  retensi_aktif_tahun   Int      @db.SmallInt
+  retensi_inaktif_tahun Int      @db.SmallInt
+  keterangan            String?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  arsip Arsip[]
+
+  @@map("kategori")
+}
+
+model Arsip {
+  id                    Int      @id @default(autoincrement())
+  nomor_arsip           String   @unique
+  judul                 String
+  kategori_id           Int
+  tanggal_arsip         DateTime @db.Date
+  nomor_surat           String?
+  pencipta_unit         String?
+  retensi_aktif_tahun   Int      @db.SmallInt
+  retensi_inaktif_tahun Int      @db.SmallInt
+  link_berkas           String
+  keterangan            String?
+  dibuat_oleh           String   @db.Uuid
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  kategori Kategori @relation(fields: [kategori_id], references: [id], onDelete: Restrict)
+
+  @@index([kategori_id])
+  @@index([tanggal_arsip])
+  @@map("arsip")
+}
+
+model LogAktivitas {
+  id         Int      @id @default(autoincrement())
+  user_id    String   @db.Uuid
+  user_nama  String
+  aksi       String   @db.VarChar(50)
+  objek      String   @db.VarChar(20)
+  objek_id   Int?
+  detail     String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at])
+  @@index([user_id])
+  @@map("log_aktivitas")
+}
