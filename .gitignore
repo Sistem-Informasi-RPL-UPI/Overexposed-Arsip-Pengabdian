@@ -42,8 +42,6 @@ next-env.d.ts
 
 # local CLAUDE.local.md
 CLAUDE.local.md
-# prisma generated client
-/src/generated/
 
 # python
 /crawler/.venv/
