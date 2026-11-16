@@ -52,7 +52,7 @@ enum JenisBerkas {
 model Dosen {
   id             Int         @id @default(autoincrement())
   user_id        String      @unique @db.Uuid
-  sinta_id       String      @unique
+  sinta_id       String?     @unique
   nama           String?
   nama_normal    String?
   afiliasi       String?
