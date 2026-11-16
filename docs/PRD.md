@@ -1,0 +1,270 @@
+# PRD: Modul 4 (Arsip Prodi) dan Modul 7 (Data Tridarma Dosen)
+
+Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
+
+Versi: 1.0. Berdasarkan ERD versi 6.
+
+---
+
+## 1. Ringkasan
+
+Proyek kelas Sistem Informasi RPL (UPI Kampus Cibiru) berisi 10 modul yang dijadikan microservice dengan login SSO bersama (SACIBIRU). Tim ini memegang dua modul:
+
+- **Modul 4, Arsip Prodi.** Web untuk mengelola arsip surat dan dokumen program studi.
+- **Modul 7, Data Tridarma Dosen.** Mengumpulkan data penelitian, pengabdian, publikasi, dan pengajaran dosen. Data penelitian dan publikasi diambil dari SINTA publik lewat crawler.
+
+Kedua modul berada di **satu aplikasi Next.js dengan satu database**. Pengembang yang memakai Claude Code ini memegang **back-end** (API, database, integrasi SSO, layanan crawler). Front-end dikerjakan orang lain di repo yang sama.
+
+## 2. Tech stack
+
+| Bagian | Pilihan |
+|---|---|
+| Aplikasi | Next.js (monolith: front-end dan back-end dalam satu repo) |
+| Database | Postgres di Neon |
+| ORM dan migrasi | Prisma (Prisma memiliki skema) |
+| Verifikasi JWT SSO | `jose` |
+| Crawler | Python, dibungkus layanan FastAPI terpisah di folder `crawler/` |
+| Library Python | `requests`, `beautifulsoup4`, `psycopg` (v3) |
+| Tempat deploy | **Belum diputuskan.** Jangan mengasumsikan Vercel atau VPS. Sediakan `Dockerfile` untuk layanan Python. |
+
+Database sebelumnya MariaDB (dump `db_belajarcrawling`). Sekarang Postgres, jadi kode dan skema lama perlu disesuaikan (lihat bagian 9).
+
+## 3. Batas tanggung jawab
+
+**Ada di repo ini:** Modul 4 dan Modul 7, termasuk sisi klien SSO (login dan callback) dan layanan crawler.
+
+**Tidak ada di repo ini:** server SSO, tabel user SSO, dan password. Semua itu ada di repo dan database SSO yang terpisah. Modul ini tidak boleh menyimpan password atau membuat tabel user.
+
+Relasi ke pengguna SSO memakai `user_id` (UUID, nilai klaim `sub`) **tanpa foreign key** lintas database.
+
+## 4. Integrasi SSO (sisi klien)
+
+SSO memakai OAuth 2.0 Authorization Code, PKCE (S256), dan access token JWT RS256. Alurnya:
+
+1. Pengguna klik kartu modul di Menu Utama SSO, lalu SSO mengalihkan ke `launch_url` modul (`/sso/login`).
+2. Modul membuat `state` dan PKCE, menyimpannya di cookie `httpOnly`, lalu mengalihkan ke `{SSO}/api/sso/authorize`.
+3. Setelah login, SSO mengalihkan ke `redirect_uri` (`/auth/callback`) membawa `code` dan `state`.
+4. Modul memastikan `state` cocok, lalu dari backend menukar `code` ke `{SSO}/api/sso/token` (dengan `client_secret` dan `code_verifier`).
+5. Modul memverifikasi JWT dengan `jose` (`algorithms: ["RS256"]`, `issuer`, `audience`) dan kunci publik dari `{SSO}/api/sso/jwks`.
+6. Modul membuat sesi lokal (cookie `httpOnly`, `secure`, `sameSite=lax`) dan menyimpan refresh token.
+
+Aturan penting:
+- Klaim token: `sub`, `name`, `email`, `nip`, `role`, `iss`, `aud`, `exp`. Pakai `sub` sebagai kunci akun.
+- Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Selalu simpan yang terbaru. Hanya satu proses yang boleh me-refresh pada satu waktu, karena memakai token lama membatalkan seluruh rantai.
+- Umur sesi lokal sama dengan access token. Saat habis, panggil `/token` dengan `grant_type=refresh_token`. Bila `invalid_grant`, hapus sesi dan arahkan ke `/sso/login`.
+- Logout: hapus sesi lokal, lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
+- `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
+
+Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, login dengan role baru bisa ditolak SSO.
+
+Variabel lingkungan: `SSO_URL` (tanpa `/` akhir, harus sama dengan klaim `iss`), `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, `SESSION_SECRET`.
+
+Pendaftaran modul ke pengelola SSO (`client_id`, `launch_url`, `redirect_uri`, role yang boleh masuk) dilakukan manual oleh tim. Karena Modul 4 dan 7 satu aplikasi, cukup satu `client_id`.
+
+## 5. Modul 7: Data Tridarma Dosen
+
+### 5.1 Tabel `dosen` dan pendaftaran dosen
+
+Tabel `dosen` **hanya berisi pengguna dengan role selain Mahasiswa**. Mahasiswa tidak pernah masuk tabel ini.
+
+Alur login pertama:
+1. Pengguna login lewat SSO. Bila role Mahasiswa, tidak ada baris `dosen` dan tidak diminta `sinta_id`.
+2. Bila role selain Mahasiswa dan belum ada baris `dosen` dengan `user_id = sub`, pengguna diminta mengisi `sinta_id`.
+3. Setelah diisi, baris `dosen` dibuat dengan `user_id = sub`, lalu crawler mengisi `nama`, `afiliasi`, `departemen`, skor, metrik, dan data lain dari SINTA.
+4. Login berikutnya mencari baris `dosen` lewat `user_id`.
+
+Aturan:
+- `dosen.user_id` wajib dan unik. `dosen.sinta_id` wajib dan unik.
+- **Tidak ada `email` dan `nip` di tabel `dosen`.** Hubungan ke SSO hanya lewat `user_id`. Tidak ada pencocokan nama ke SSO.
+- `dosen.nama` dan `nama_normal` tetap berasal dari SINTA, karena `nama_normal` dipakai mencocokkan nama ketua dan anggota di `kegiatan_anggota` (juga dari SINTA). Jangan menimpanya dengan nama SSO. Nama tampilan di aplikasi diambil dari sesi SSO.
+- Tiga baris `dosen` di dump lama adalah data uji dari masa sebelum SSO. Buang, jangan di-seed.
+
+### 5.2 Sumber data: SINTA publik
+
+SINTA diambil **tanpa login**. Halaman publik hanya menampilkan sekitar 10 item pertama per tab, jadi data bisa terpotong (dicatat di `crawl_log.terpotong`). Login SINTA dengan akun dosen masih berupa opsi, belum dicoba, dan butuh persetujuan dosen. **Jangan diimplementasikan.**
+
+Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, metrik (Scopus, Google Scholar, WOS), dan 8 tab: Scopus, Garuda, Google Scholar, RAMA, Penelitian, Pengabdian, IPR (HKI), Buku.
+
+### 5.3 Aturan pemrosesan data (sudah ditetapkan)
+
+- **Anti-dobel.** Kunci dibuat dari teks yang dinormalisasi (huruf kecil, tanpa tanda baca), lalu di-hash md5. `publikasi.judul_hash = md5(norm(judul))`. `kegiatan.kunci = md5(jenis | judul | tahun)`. `iprs.kunci` dari nomor permohonan, atau judul dan tahun bila kosong. `buku.kunci` dari ISBN, atau judul dan tahun bila kosong.
+- **Upsert.** Crawl ulang tidak menambah baris ganda, hanya memperbarui.
+- **Publikasi.** `sitasi` memakai nilai tertinggi (`GREATEST`). Kolom lain diisi hanya bila masih kosong (`COALESCE`).
+- **Urutan sumber saat simpan:** Scopus, Garuda, Google Scholar SINTA, RAMA. Nilai `publikasi_dosen.source`: `sinta_scopus`, `sinta_garuda`, `sinta_googlescholar`, `sinta_rama`.
+- **Ketua dan anggota kegiatan.** `nama` disimpan apa adanya, `nama_normal` hasil normalisasi. Dicocokkan ke `dosen.nama_normal` hanya bila cocok tepat satu baris. Yang tidak cocok tetap tersimpan dengan `dosen_id` NULL.
+- **Gelar dibuang saat normalisasi** (Dr., Prof., S.Kom., M.T., dst).
+- **Tab gagal tidak menimpa data lama.** Kegagalan dicatat di `crawl_log`.
+- **Status sinkron (`sync_status`).** `IN_PROGRESS` saat berjalan. `SUCCESS` (dan `last_synced_at` diisi) bila semua tab berhasil. `PARTIAL` bila sebagian gagal. `FAILED` bila semua gagal. Sisa `IN_PROGRESS` yang sudah lama dianggap `FAILED`.
+- **Jadwal sinkron ulang.** Dosen diproses bila belum pernah sinkron, sudah lebih dari 7 hari, atau statusnya `FAILED` atau `PARTIAL`.
+- **Jeda.** Sekitar 3 detik antar request ke SINTA dan jeda acak antar dosen (target dalam ringkasan awal). Kode saat ini baru 1,5 detik per tab. Putuskan angkanya, lalu samakan.
+
+### 5.4 Pengajaran (bidang tridarma ketiga)
+
+Mengoleksi kinerja dosen di bidang pengajaran. Berkas berupa **link saja** (misalnya Google Drive), tidak ada upload.
+
+- `matkul`: daftar mata kuliah (`kode` unik, `nama`, `sks`).
+- `kelas`: mata kuliah yang diampu dosen pada tahun ajaran dan semester tertentu (`matkul_id`, `dosen_id`, `tahun_ajaran`, `semester` Ganjil/Genap). Sebaiknya unik per (`matkul_id`, `dosen_id`, `tahun_ajaran`, `semester`).
+- `berkas_pengajaran`: berkas per kelas. Kolom `jenis` berupa enum: **RPS, Slide, UTS, UAS, Kuis, Presensi, Nilai, Modul**. Satu kelas boleh punya lebih dari satu berkas dengan jenis sama (misalnya dua kuis).
+- Tidak ada tabel kategori berkas, dan **tidak ada kolom retensi** di berkas pengajaran (lihat keputusan terbuka).
+
+### 5.5 Fase berikutnya (belum dikerjakan, jangan dibangun dulu)
+
+- Grafik profil SINTA ("Latest number of publications" per tahun dan "Article Quartile"). Bisa dihitung dari `publikasi` dan `publikasi_dosen` (filter `source = 'sinta_scopus'`), tetapi hanya akurat untuk dosen dengan 10 artikel Scopus atau kurang, karena batas SINTA publik.
+- Rekap penilaian tridarma dengan kolom TS, TS-1, TS-2 yang diisi manual oleh admin per tahun (bukan dihitung dari crawling). Tabel "Publikasi Ilmiah Hasil Penelitian DTPS" punya 10 jenis publikasi.
+- `kutipan_tahun` (sitasi per tahun dari SerpAPI) sudah dirancang tetapi tidak dipakai, karena alur sekarang hanya SINTA.
+
+## 6. Modul 4: Arsip Prodi (Ruang Arsip Digital)
+
+Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip, Daftar Arsip, Kategori, Users, Log Aktivitas, Profil Saya, Logout.
+
+- Berkas **tidak diupload**, hanya disimpan sebagai link (`link_berkas`). Lokasi fisik dan ikon kategori sudah dihapus dari desain.
+- Modul 4 **tidak punya tabel user**. Halaman Profil Saya diambil dari sesi SSO.
+- `kategori`: `kode` unik (contoh KEU), `nama`, `retensi_aktif_tahun`, `retensi_inaktif_tahun`, `keterangan`.
+- `arsip`: `nomor_arsip` (unik, **dibuat otomatis oleh aplikasi, format belum ditentukan**), `judul`, `kategori_id`, `tanggal_arsip`, `nomor_surat`, `pencipta_unit`, `retensi_aktif_tahun` dan `retensi_inaktif_tahun` (**salinan dari kategori saat dibuat, boleh diubah**), `link_berkas`, `keterangan`, `dibuat_oleh` (`sub` SSO), `created_at`, `updated_at`.
+- `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (**salinan nama**, supaya log tetap terbaca bila user dihapus di SSO), `aksi`, `objek` (arsip atau kategori), `objek_id`, `detail`, `ip_address`, `created_at`.
+- Kategori yang masih dipakai arsip **tidak bisa dihapus** (`ON DELETE RESTRICT`). Retensi disalin ke arsip supaya perubahan kategori tidak mengubah arsip lama.
+- **View `v_arsip`** menggabungkan arsip dan kategori, dengan `tanggal_habis_aktif`, `tanggal_habis_inaktif`, dan `status`. Status **dihitung saat dibaca, tidak disimpan**: *Aktif* (sebelum habis retensi aktif), *Inaktif* (habis aktif, belum habis inaktif), *Habis Retensi* (habis keduanya). Label status masih usulan.
+- Data awal kategori: ADM Arsip Administrasi (2/3), HRD Arsip HRD (2/5), KEU Arsip Keuangan (2/8), OPS Arsip Operasional (2/3), PRG Arsip Program (2/3), RND Arsip RnD (3/5), SLS Arsip Sales (2/3), TI Arsip Teknologi Informasi (2/3). Angka dalam kurung adalah retensi aktif/inaktif (tahun).
+
+## 7. Model data
+
+Sumber kebenaran adalah ERD versi 6 (`claude/erd-sso-modul-4-7.md` di Project Verval, dan file `erd-modul-4-7.drawio`). Ringkasan:
+
+**Modul 7:** `dosen`, `sinta_skor` (PK dosen_id+label), `sinta_metrik` (PK dosen_id+label; kolom scopus, gscholar, wos), `crawl_log`, `publikasi`, `publikasi_dosen` (PK publikasi_id+dosen_id+source), `kegiatan` (jenis: penelitian/pengabdian), `kegiatan_anggota` (PK kegiatan_id+nama_normal, `dosen_id` boleh NULL), `iprs`, `iprs_dosen`, `buku`, `buku_dosen`, `matkul`, `kelas`, `berkas_pengajaran`.
+
+**Modul 4:** `kategori`, `arsip`, `log_aktivitas`, view `v_arsip`.
+
+Aturan relasi: relasi antar tabel dalam database memakai foreign key (cascade untuk tabel penghubung dosen; `kegiatan_anggota.dosen_id` menjadi NULL bila dosen dihapus; `arsip.kategori_id` RESTRICT). Kolom `user_id`, `dibuat_oleh`, dan `log_aktivitas.user_id` bertipe `CHAR(36)` atau UUID **tanpa FK**.
+
+## 8. Layanan crawler (Python)
+
+Layanan FastAPI kecil di `crawler/`, dipanggil dari route handler Next.js lewat HTTP.
+
+Alur sinkron:
+1. Front-end memanggil `POST /api/dosen/sinkron` di Next.js.
+2. Route handler memeriksa sesi dan role, lalu mengubah status secara atomik: `updateMany` dengan kondisi `sync_status != IN_PROGRESS`. Bila tidak ada baris berubah, tolak dengan pesan "sedang berjalan".
+3. Route handler memanggil `POST {CRAWLER_URL}/sync` dengan body `{ "sinta_id": "..." }` dan header `X-Internal-Key`, lalu membalas `202 Accepted` **tanpa menunggu**.
+4. Layanan Python menjalankan crawl dan **menulis langsung ke database** memakai logika upsert yang sudah ada. Status akhir `SUCCESS`, `PARTIAL`, atau `FAILED`.
+5. Front-end memeriksa `sync_status` secara berkala.
+
+Aturan:
+- Crawling **tidak boleh dijalankan di dalam request** (sekitar 8 tab dengan jeda, 15 sampai 30 detik atau lebih).
+- Layanan Python **tidak boleh publik**. Wajib header rahasia `X-Internal-Key` (nilai di `INTERNAL_KEY`), idealnya hanya di jaringan internal.
+- Hanya satu crawl berjalan pada satu waktu (antrean sederhana), supaya SINTA tidak kebanjiran.
+- Sisa `IN_PROGRESS` yang lama ditandai `FAILED` saat layanan menyala atau bila sudah lewat beberapa menit. Jangan dijalankan di setiap request.
+- Layanan Python hanya meng-UPDATE baris `dosen` yang sudah ada (dibuat oleh Next.js saat login pertama). Ia tidak membuat baris `dosen`.
+
+Endpoint layanan: `POST /sync`, `GET /health`.
+
+## 9. Porting MariaDB ke Postgres (Neon) dan Prisma
+
+**Kode Python (`sinta_to_db.py` menjadi `loader.py`):**
+
+| MariaDB | Postgres |
+|---|---|
+| `pymysql`, `DictCursor` | `psycopg` v3, `dict_row` |
+| `INSERT ... ON DUPLICATE KEY UPDATE` | `INSERT ... ON CONFLICT (kolom_unik) DO UPDATE SET k = EXCLUDED.k` |
+| `INSERT IGNORE` | `INSERT ... ON CONFLICT DO NOTHING` |
+| `VALUES(kolom)` di dalam update | `EXCLUDED.kolom` |
+| `IF(a, b, c)` | `CASE WHEN a THEN b ELSE c END` |
+| `NOW() - INTERVAL %s DAY` | `NOW() - (%s * INTERVAL '1 day')` |
+| `UPDATE ... JOIN` (di `backfill_anggota`) | `UPDATE ... SET ... FROM ... WHERE ...` |
+| Backtick | Tanda kutip ganda atau tanpa pembungkus |
+| `DB_CONFIG` dengan `root` tanpa password | `DATABASE_URL` dari environment, `sslmode=require` |
+| `main()` dan argparse | fungsi `sync_dosen(sinta_id)` untuk FastAPI |
+
+Placeholder `%s`, `COALESCE`, `GREATEST`, `NULLIF`, `CONCAT_WS` tetap bisa dipakai. Uji penulisan nilai string ke kolom enum Postgres.
+
+**Skema Prisma:**
+- Kolom `publikasi.sumber` (tipe SET) **dihapus**. Nilainya dihitung dari `publikasi_dosen.source` saat dibaca. Fungsi `sinkron_sumber` di Python ikut dihapus.
+- `kegiatan.updated_at`: Prisma `@updatedAt` hanya bekerja dari sisi Prisma. Dari Python, isi `updated_at = NOW()` secara eksplisit.
+- Tipe: `tinyint` menjadi `SmallInt`, `datetime` menjadi `DateTime`, `enum` menjadi `enum` Prisma, `user_id` menjadi `String` (atau `@db.Uuid`).
+- Pakai `@@map` dan `@map` agar nama tabel dan kolom di database tetap `snake_case`, karena SQL di Python memakai nama itu.
+- Migrasi memakai URL koneksi langsung (non-pooled); aplikasi memakai URL pooled. Variabel: `DATABASE_URL` dan `DIRECT_URL`.
+- **Prisma adalah satu-satunya pemilik skema.** Setiap perubahan skema harus diikuti pengecekan SQL di `crawler/`.
+
+## 10. Struktur folder (usulan)
+
+```
+sacibiru-modul/
+├─ prisma/
+│  ├─ schema.prisma
+│  └─ migrations/
+├─ src/
+│  ├─ app/
+│  │  ├─ sso/login/route.ts
+│  │  ├─ auth/callback/route.ts
+│  │  └─ api/
+│  │     ├─ dosen/sinta-id/route.ts
+│  │     ├─ dosen/sinkron/route.ts
+│  │     ├─ arsip/...
+│  │     ├─ kategori/...
+│  │     ├─ pengajaran/...
+│  │     └─ tridarma/...
+│  ├─ lib/
+│  │  ├─ db.ts
+│  │  ├─ session.ts
+│  │  ├─ sso.ts
+│  │  └─ crawler-client.ts
+│  └─ middleware.ts
+├─ crawler/
+│  ├─ app/
+│  │  ├─ main.py
+│  │  ├─ sinta.py
+│  │  ├─ loader.py
+│  │  └─ config.py
+│  ├─ requirements.txt
+│  ├─ Dockerfile
+│  └─ .env.example
+├─ .env.example
+├─ .vercelignore
+└─ package.json
+```
+
+Di `crawler/app/`, `loader.py` mengimpor `sinta.py` dengan `import sinta`. Nama file dan impor harus sama.
+
+**Batas kerja back-end di repo bersama:** pemilik back-end memegang `prisma/`, `src/app/api/**`, `src/app/sso/**`, `src/app/auth/**`, `src/lib/**`, `src/middleware.ts`, dan `crawler/`. File UI dan komponen milik front-end, jangan diedit tanpa diminta.
+
+## 11. Masalah yang sudah diketahui di kode crawler yang ada
+
+Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti hasilnya baik di JSON, tapi belum pernah dijalankan ke database dan SINTA asli):
+
+1. Jeda antar tab 1,5 detik, sedangkan target sekitar 3 detik.
+2. `parse_profile_overview`: angka seperti `1.234` diperlakukan sebagai desimal. Bila SINTA memakai titik sebagai pemisah ribuan, skor akan keliru. Cek dengan HTML asli.
+3. `simpan_kegiatan` memanggil `muat_peta_dosen` untuk setiap baris, yaitu satu query tambahan per kegiatan. Pindahkan ke luar loop.
+4. Untuk ID yang tidak ada (404), `fetch` mengembalikan `None` dan pesannya menjadi "Gagal menghubungi SINTA". Retry sekitar 12 detik tidak perlu untuk 404.
+5. `norm_nama` membuang semua teks setelah koma pertama. Nama berformat "Nama, Nama" bisa terpotong.
+6. Docstring menyebut `sinta_1.py`, tetapi kode memakai `import sinta`. Samakan.
+
+## 12. Keputusan terbuka (tanyakan ke pemilik proyek)
+
+1. **Staff Kaprodi dan `sinta_id`.** Aturan "selain Mahasiswa" mencakup Staff Kaprodi yang biasanya bukan dosen. Apakah hanya Dosen dan Kaprodi yang wajib mengisi `sinta_id`, atau Staff Kaprodi boleh melewati?
+2. **Pengisian `sinta_id` milik orang lain.** Karena diisi sendiri, pengguna bisa memasukkan ID orang lain. Usulan: setelah ID diisi, crawler mengambil nama SINTA untuk dikonfirmasi; bila tidak mirip nama SSO, statusnya menunggu persetujuan Kaprodi.
+3. **Retensi berkas pengajaran.** Kolom retensi dihapus karena kategori dihapus. Apakah tetap perlu retensi? Bila ya: diisi manual per berkas, atau satu aturan untuk semua berkas pengajaran.
+4. **`kelas` per tahun ajaran atau per mata kuliah saja.** Saat ini per kelas (mata kuliah + dosen + tahun ajaran + semester).
+5. **Role dan hak akses.** Siapa boleh melihat dan mengubah apa (misalnya siapa yang boleh mengakses Modul 4, siapa yang boleh melihat data dosen lain, siapa yang menyetujui) **belum ditetapkan**. Jangan menebak. Tanyakan sebelum membuat otorisasi.
+6. **Halaman Users di Modul 4.** SSO tidak punya endpoint daftar semua user. Pilihan: (a) daftar user dari jejak di `arsip` dan `log_aktivitas`, hanya yang pernah login; atau (b) tabel salinan ringan `sso_user_cache` (bertentangan dengan aturan "tanpa tabel user").
+7. **Format `nomor_arsip`** otomatis.
+8. **Label status arsip** (Aktif, Inaktif, Habis Retensi masih usulan).
+9. **Tempat deploy** (menentukan tempat layanan Python dan batas waktu fungsi).
+10. **Pendaftaran role baru di SSO** (`Staff Kaprodi`, `Mahasiswa`) dan nasib akun `Admin Prodi RPL` di data SSO.
+11. **Jeda crawling** (1,5 atau 3 detik).
+
+## 13. Di luar cakupan
+
+- Server SSO dan tabel user SSO.
+- Upload file (semua berkas berupa link).
+- Login SINTA dengan akun dosen.
+- Pengisian rekap TS, TS-1, TS-2 dan grafik profil (fase berikutnya, lihat 5.5).
+- Front-end dan UI.
+- SerpAPI / Google Scholar lewat API (tidak dipakai lagi).
+
+## 14. Urutan pengerjaan (usulan)
+
+1. `schema.prisma` dari ERD versi 6 dan migrasi ke Neon.
+2. Sisi klien SSO: `/sso/login`, `/auth/callback`, sesi, refresh, logout.
+3. Alur login pertama dan pengisian `sinta_id`.
+4. `loader.py` versi Postgres dan layanan FastAPI, lalu route `POST /api/dosen/sinkron`.
+5. API Modul 4 (kategori, arsip, `v_arsip`, log aktivitas).
+6. API Modul 7 (tridarma, lalu pengajaran).
+7. Tinjauan keamanan sisi SSO, lalu tes untuk logika murni (normalisasi nama, hash, status retensi, upsert).
