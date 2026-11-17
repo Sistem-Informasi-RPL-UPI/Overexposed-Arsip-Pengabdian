@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.3. Berdasarkan ERD versi 6.
+Versi: 1.4. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                      |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -10,6 +10,7 @@ Versi: 1.3. Berdasarkan ERD versi 6.
 | 1.1   | 2026-11-17 | Crawler diputuskan di Render Web Service gratis, on-demand, tanpa cron dan tanpa monitor ping. Alur sinkron diperjelas (warm-up, async, status di database). Aturan 7 hari berlaku untuk semua peran dan tidak bisa dipaksa. Keputusan deploy crawler ditutup. |
 | 1.2   | 2026-11-17 | Role admin di bagian 8.1 diganti Staff Kaprodi (rute `/api/staff-kaprodi/sinkron`). Catatan "Admin belum ada di SSO" dihapus, pertanyaan hak Kaprodi ditambahkan ke bagian 12.                                                                                 |
 | 1.3   | 2026-11-17 | Pengisian `sinta_id` untuk Staff Kaprodi dibuat opsional (5.1, 8.1). Pertanyaan terbuka nomor 1 ditutup.                                                                                                                                                       |
+| 1.4   | 2026-11-17 | Sesi disimpan di cookie terenkripsi (refresh token dienkripsi dengan kunci dari `SESSION_SECRET`). Tidak ada tabel sesi. Aturan refresh diperjelas dan risiko pencabutan sesi ditambahkan ke bagian 12. |
 
 ---
 
@@ -54,19 +55,21 @@ SSO memakai OAuth 2.0 Authorization Code, PKCE (S256), dan access token JWT RS25
 3. Setelah login, SSO mengalihkan ke `redirect_uri` (`/auth/callback`) membawa `code` dan `state`.
 4. Modul memastikan `state` cocok, lalu dari backend menukar `code` ke `{SSO}/api/sso/token` (dengan `client_secret` dan `code_verifier`).
 5. Modul memverifikasi JWT dengan `jose` (`algorithms: ["RS256"]`, `issuer`, `audience`) dan kunci publik dari `{SSO}/api/sso/jwks`.
-6. Modul membuat sesi lokal (cookie `httpOnly`, `secure`, `sameSite=lax`) dan menyimpan refresh token.
+6. Modul membuat sesi lokal berupa cookie `httpOnly`, `secure`, `sameSite=lax` yang berisi refresh token **terenkripsi** (AES-256-GCM, kunci turunan dari `SESSION_SECRET`). Tidak ada tabel sesi di database.
 
 Aturan penting:
 
 - Klaim token: `sub`, `name`, `email`, `nip`, `role`, `iss`, `aud`, `exp`. Pakai `sub` sebagai kunci akun.
-- Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Selalu simpan yang terbaru. Hanya satu proses yang boleh me-refresh pada satu waktu, karena memakai token lama membatalkan seluruh rantai.
-- Umur sesi lokal sama dengan access token. Saat habis, panggil `/token` dengan `grant_type=refresh_token`. Bila `invalid_grant`, hapus sesi dan arahkan ke `/sso/login`.
-- Logout: hapus sesi lokal, lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
+- Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Setiap refresh yang berhasil harus menulis ulang cookie dengan refresh token terbaru. Memakai token lama membatalkan seluruh rantai. Karena sesi disimpan di cookie, tidak ada kunci di server untuk mencegah dua refresh paralel. Refresh hanya dilakukan saat access token habis, dan kegagalan `invalid_grant` diarahkan ke login ulang.
+- Umur sesi lokal sama dengan access token. Saat habis, panggil `/token` dengan `grant_type=refresh_token`. Bila `invalid_grant`, hapus cookie sesi dan arahkan ke `/sso/login`.
+- Logout: hapus cookie sesi lokal, lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
 - `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
 
 Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, login dengan role baru bisa ditolak SSO. Role `Staff Kaprodi` yang dipakai di bagian 8.1 sudah termasuk dalam daftar role di atas.
 
 Variabel lingkungan: `SSO_URL` (tanpa `/` akhir, harus sama dengan klaim `iss`), `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, `SESSION_SECRET`.
+
+`SESSION_SECRET` dipakai untuk mengenkripsi refresh token. Mengubahnya membuat semua sesi aktif tidak bisa dibaca, sehingga semua user harus login ulang. Nilainya berbeda untuk setiap aplikasi dan tidak dibagi antar modul.
 
 Pendaftaran modul ke pengelola SSO (`client_id`, `launch_url`, `redirect_uri`, role yang boleh masuk) dilakukan manual oleh tim. Karena Modul 4 dan 7 satu aplikasi, cukup satu `client_id`.
 
@@ -292,6 +295,7 @@ Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti ha
 9. **Konflik antrean.** Saat "sinkron semua" sedang berjalan, permintaan crawl satu dosen ditolak dengan pesan "sedang berjalan", atau masuk antrean?
 10. **Dosen memicu crawl dirinya saat Staff Kaprodi sedang sinkron semua.** Apakah tetap ditolak atau diantrekan?
 11. **Dosen dengan status `FAILED` atau `PARTIAL`.** Boleh diulang sebelum 7 hari, atau tetap menunggu 7 hari seperti dosen lain?
+12. **Pencabutan sesi.** Karena sesi disimpan di cookie, akun yang dicabut admin SSO baru terasa saat refresh berikutnya gagal. Diterima untuk skala tugas ini. Perlu persetujuan tim.
 
 ## 13. Di luar cakupan
 
@@ -302,6 +306,7 @@ Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti ha
 - Front-end dan UI.
 - SerpAPI / Google Scholar lewat API (tidak dipakai lagi).
 - Cron job dan monitor uptime untuk layanan crawler.
+- Tabel sesi di database. Sesi disimpan di cookie terenkripsi.
 
 ## 14. Urutan pengerjaan (usulan)
 
