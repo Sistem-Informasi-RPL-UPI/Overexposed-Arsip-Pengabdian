@@ -2,15 +2,16 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.4. Berdasarkan ERD versi 6.
+Versi: 1.5. Berdasarkan ERD versi 6.
 
-| Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                      |
-| ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1.0   | (awal)     | Versi awal.                                                                                                                                                                                                                                                    |
-| 1.1   | 2026-11-17 | Crawler diputuskan di Render Web Service gratis, on-demand, tanpa cron dan tanpa monitor ping. Alur sinkron diperjelas (warm-up, async, status di database). Aturan 7 hari berlaku untuk semua peran dan tidak bisa dipaksa. Keputusan deploy crawler ditutup. |
-| 1.2   | 2026-11-17 | Role admin di bagian 8.1 diganti Staff Kaprodi (rute `/api/staff-kaprodi/sinkron`). Catatan "Admin belum ada di SSO" dihapus, pertanyaan hak Kaprodi ditambahkan ke bagian 12.                                                                                 |
-| 1.3   | 2026-11-17 | Pengisian `sinta_id` untuk Staff Kaprodi dibuat opsional (5.1, 8.1). Pertanyaan terbuka nomor 1 ditutup.                                                                                                                                                       |
-| 1.4   | 2026-11-17 | Sesi disimpan di cookie terenkripsi (refresh token dienkripsi dengan kunci dari `SESSION_SECRET`). Tidak ada tabel sesi. Aturan refresh diperjelas dan risiko pencabutan sesi ditambahkan ke bagian 12. |
+| Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0   | (awal)     | Versi awal.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 1.1   | 2026-11-17 | Crawler diputuskan di Render Web Service gratis, on-demand, tanpa cron dan tanpa monitor ping. Alur sinkron diperjelas (warm-up, async, status di database). Aturan 7 hari berlaku untuk semua peran dan tidak bisa dipaksa. Keputusan deploy crawler ditutup.                                                                                                                                                 |
+| 1.2   | 2026-11-17 | Role admin di bagian 8.1 diganti Staff Kaprodi (rute `/api/staff-kaprodi/sinkron`). Catatan "Admin belum ada di SSO" dihapus, pertanyaan hak Kaprodi ditambahkan ke bagian 12.                                                                                                                                                                                                                                 |
+| 1.3   | 2026-11-17 | Pengisian `sinta_id` untuk Staff Kaprodi dibuat opsional (5.1, 8.1). Pertanyaan terbuka nomor 1 ditutup.                                                                                                                                                                                                                                                                                                       |
+| 1.4   | 2026-11-17 | Sesi disimpan di cookie terenkripsi (refresh token dienkripsi dengan kunci dari `SESSION_SECRET`). Tidak ada tabel sesi. Aturan refresh diperjelas dan risiko pencabutan sesi ditambahkan ke bagian 12.                                                                                                                                                                                                        |
+| 1.5   | 2026-11-18 | Modul 4 dirombak: hak akses per peran (6.1), validasi arsip oleh Kaprodi dengan halaman terpisah, nomor arsip dan nomor surat diisi manual, edit arsip, hapus hanya untuk status Dimusnahkan, status retensi Aktif/Inaktif/Dimusnahkan, tanggal tanpa jam. Log aktivitas diperluas ke modul 4, 7, dan login (sukses dan gagal) dengan kolom `modul`, tanpa `objek_id` dan `ip_address`. Halaman Users dihapus. |
 
 ---
 
@@ -63,6 +64,7 @@ Aturan penting:
 - Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Setiap refresh yang berhasil harus menulis ulang cookie dengan refresh token terbaru. Memakai token lama membatalkan seluruh rantai. Karena sesi disimpan di cookie, tidak ada kunci di server untuk mencegah dua refresh paralel. Refresh hanya dilakukan saat access token habis, dan kegagalan `invalid_grant` diarahkan ke login ulang.
 - Umur sesi lokal sama dengan access token. Saat habis, panggil `/token` dengan `grant_type=refresh_token`. Bila `invalid_grant`, hapus cookie sesi dan arahkan ke `/sso/login`.
 - Logout: hapus cookie sesi lokal, lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
+- Login sukses dan gagal dicatat di `log_aktivitas` dengan `modul = auth`. Saat gagal, `user_id` dan `user_nama` kosong, dan alasan gagal disimpan di `detail`.
 - `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
 
 Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, login dengan role baru bisa ditolak SSO. Role `Staff Kaprodi` yang dipakai di bagian 8.1 sudah termasuk dalam daftar role di atas.
@@ -129,16 +131,70 @@ Mengoleksi kinerja dosen di bidang pengajaran. Berkas berupa **link saja** (misa
 
 ## 6. Modul 4: Arsip Prodi (Ruang Arsip Digital)
 
-Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip, Daftar Arsip, Kategori, Users, Log Aktivitas, Profil Saya, Logout.
+Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip (Staff Kaprodi), Daftar Arsip, Validasi Arsip (Kaprodi), Kategori, Log Aktivitas, Profil Saya, Logout. Halaman Users dihapus dari desain.
 
-- Berkas **tidak diupload**, hanya disimpan sebagai link (`link_berkas`). Lokasi fisik dan ikon kategori sudah dihapus dari desain.
-- Modul 4 **tidak punya tabel user**. Halaman Profil Saya diambil dari sesi SSO.
-- `kategori`: `kode` unik (contoh KEU), `nama`, `retensi_aktif_tahun`, `retensi_inaktif_tahun`, `keterangan`.
-- `arsip`: `nomor_arsip` (unik, **dibuat otomatis oleh aplikasi, format belum ditentukan**), `judul`, `kategori_id`, `tanggal_arsip`, `nomor_surat`, `pencipta_unit`, `retensi_aktif_tahun` dan `retensi_inaktif_tahun` (**salinan dari kategori saat dibuat**), `link_berkas`, `keterangan`, `dibuat_oleh` (`sub` SSO), `created_at`, `updated_at`.
-- `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (**salinan nama**, supaya log tetap terbaca bila user dihapus di SSO), `aksi`, `objek` (arsip atau kategori), `objek_id`, `detail`, `created_at`.
-- Kategori yang masih dipakai arsip **tidak bisa dihapus** (`ON DELETE RESTRICT`). Retensi disalin ke arsip supaya perubahan kategori tidak mengubah arsip lama.
-- **View `v_arsip`** menggabungkan arsip dan kategori, dengan `tanggal_habis_aktif`, `tanggal_habis_inaktif`, dan `status`. Status **dihitung saat dibaca, tidak disimpan**: _Aktif_ (sebelum habis retensi aktif), _Inaktif_ (habis aktif, belum habis inaktif), _Habis Retensi_ (habis keduanya). Label status masih usulan.
-- Data awal kategori: ADM Arsip Administrasi (2/3), HRD Arsip HRD (2/5), KEU Arsip Keuangan (2/8), OPS Arsip Operasional (2/3), PRG Arsip Program (2/3), RND Arsip RnD (3/5), SLS Arsip Sales (2/3), TI Arsip Teknologi Informasi (2/3). Angka dalam kurung adalah retensi aktif/inaktif (tahun).
+### 6.1 Hak akses Modul 4
+
+| Peran         | Dashboard | Daftar Arsip | Kategori | Validasi Arsip | Log Aktivitas | Tulis                                  |
+| ------------- | --------- | ------------ | -------- | -------------- | ------------- | -------------------------------------- |
+| Staff Kaprodi | ya        | ya           | ya       | tidak          | ya            | tambah, ubah, hapus arsip dan kategori |
+| Kaprodi       | ya        | ya           | ya       | ya             | ya            | hanya validasi arsip                   |
+| Dosen         | ya\*      | ya           | tidak    | tidak          | tidak         | tidak ada                              |
+| Mahasiswa     | tidak     | tidak        | tidak    | tidak          | tidak         | tidak ada akses ke modul arsip         |
+
+\* Akses Dashboard untuk Dosen belum dikonfirmasi (bagian 12 nomor 13).
+
+- Kaprodi hanya satu orang.
+- Hak tulis dicek di server, bukan hanya disembunyikan di UI.
+
+### 6.2 Kategori
+
+- `kategori`: `kode` unik (contoh KEU, maksimal 5 karakter huruf kapital), `nama`, `retensi_aktif_tahun`, `retensi_inaktif_tahun`, `keterangan`. Tidak ada ikon.
+- Form tambah dan edit memakai field yang sama. Edit dilakukan lewat klik baris di front-end.
+- Hapus hanya bisa dilakukan kalau kategori tidak dipakai arsip (`ON DELETE RESTRICT`).
+- Data awal: ADM Arsip Administrasi (2/3), HRD Arsip HRD (2/5), KEU Arsip Keuangan (2/8), OPS Arsip Operasional (2/3), PRG Arsip Program (2/3), RND Arsip RnD (3/5), SLS Arsip Sales (2/3), TI Arsip Teknologi Informasi (2/3). Angka dalam kurung adalah retensi aktif/inaktif (tahun).
+
+### 6.3 Arsip
+
+- Berkas **tidak diupload**, hanya disimpan sebagai link (`link_berkas`).
+- `arsip`:
+  - `nomor_arsip`: wajib, diisi manual, unik.
+  - `nomor_surat`: wajib.
+  - `judul`, `kategori_id`, `tanggal_arsip` (tanggal saja, tanpa jam), `pencipta_unit`, `keterangan`, `link_berkas`.
+  - `retensi_aktif_tahun` dan `retensi_inaktif_tahun`: salinan dari kategori saat dibuat, boleh diubah.
+  - `status_validasi`: Pending, Diterima, atau Ditolak.
+  - `catatan_validasi`: wajib diisi saat Ditolak.
+  - `dibuat_oleh` (`sub` SSO), `created_at`, `updated_at`.
+- **Alur validasi:**
+  1. Arsip yang dibuat Staff Kaprodi otomatis berstatus Pending.
+  2. Kaprodi menyetujui (Diterima) atau menolak (Ditolak, dengan catatan).
+  3. Setiap perubahan isi arsip, termasuk arsip yang Ditolak, mengembalikan status ke Pending.
+- **Halaman Validasi Arsip** terpisah, khusus Kaprodi, dengan tab Pending, Diterima, dan Ditolak.
+- **Status retensi** dihitung saat dibaca, tidak disimpan. Ada tiga nilai:
+  - Aktif: sebelum habis retensi aktif.
+  - Inaktif: sudah habis retensi aktif, belum habis retensi inaktif.
+  - Dimusnahkan: sudah habis keduanya.
+- **Hapus arsip** hanya bisa dilakukan kalau status retensinya Dimusnahkan. Hapus permanen.
+- **Dashboard** menampilkan total arsip yang status retensinya Aktif, dan lima arsip terbaru. Badge Masuk/Keluar dan field pengirim dihapus.
+- **Daftar Arsip**: pencarian, filter kategori, filter tahun, reset filter, tombol tambah arsip, dan tabel dengan kolom nomor arsip, judul, kategori, masa retensi (aktif dan inaktif), serta aksi detail dan hapus.
+
+### 6.4 Log aktivitas
+
+- `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (salinan nama, supaya log tetap terbaca bila user dihapus di SSO), `modul` (`4`, `7`, atau `auth`), `aksi` (tambah, ubah, hapus, validasi, sinkron, login, login_gagal), `objek` (arsip, kategori, dosen, atau sso), `detail` (teks yang berisi pengenal, misalnya nomor arsip atau judul, serta alasan gagal login), `created_at`.
+- Tidak ada `objek_id` dan `ip_address`.
+- Yang dicatat: tambah, ubah, hapus, dan validasi arsip; perubahan kategori; sinkron dosen (modul 7); login sukses dan gagal (modul auth).
+- Yang boleh melihat: Staff Kaprodi dan Kaprodi.
+
+### 6.5 Profil Saya
+
+- Data dari sesi SSO, ditambah `sinta_id` dari tabel `dosen` bila role-nya memakainya.
+- Mahasiswa tidak punya baris `dosen`, jadi tidak ada `sinta_id`.
+
+### 6.6 Aturan umum
+
+- Modul 4 **tidak punya tabel user**. Data user diambil dari sesi SSO.
+- Retensi disalin ke arsip saat dibuat, supaya perubahan kategori tidak mengubah arsip lama.
+- Kategori yang masih dipakai arsip tidak bisa dihapus.
 
 ## 7. Model data
 
@@ -177,6 +233,7 @@ Aturan:
 - Sisa `IN_PROGRESS` yang sudah lama ditandai `FAILED` saat layanan menyala. Jangan dijalankan di setiap request.
 - Layanan Python hanya meng-UPDATE baris `dosen` yang sudah ada (dibuat oleh Next.js saat login pertama). Ia tidak membuat baris `dosen`.
 - Layanan Python memakai `DATABASE_URL` berupa URL pooled.
+- Setiap sinkron dicatat di `log_aktivitas` dengan `modul = 7`, termasuk pemicu, `sinta_id` (atau semua dosen), dan status akhir.
 
 Endpoint layanan: `GET /health`, `POST /sync`.
 
@@ -245,10 +302,12 @@ sacibiru-modul/
 │  │     ├─ dosen/sinkron/route.ts
 │  │     ├─ dosen/sinkron/status/route.ts
 │  │     ├─ staff-kaprodi/sinkron/route.ts
-│  │     ├─ arsip/...
-│  │     ├─ kategori/...
-│  │     ├─ pengajaran/...
-│  │     └─ tridarma/...
+│  │     ├─ log-aktivitas/route.ts
+│  │     ├─ arsip/
+│  │     │  ├─ kategori/...
+│  │     │  └─ validasi/...
+│  │     └─ tridarma/
+│  │        └─ pengajaran/...
 │  ├─ lib/
 │  │  ├─ db.ts
 │  │  ├─ session.ts
@@ -284,18 +343,21 @@ Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti ha
 
 ## 12. Keputusan terbuka (tanyakan ke pemilik proyek)
 
+Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah diputuskan ditandai.
+
 1. _(Sudah diputuskan: pengisian `sinta_id` untuk Staff Kaprodi opsional. Lihat 5.1.)_
 2. **`kelas` per tahun ajaran atau per mata kuliah saja.** Saat ini per kelas (mata kuliah + dosen + tahun ajaran + semester).
 3. **Hak crawl Kaprodi.** Bagian 8.1 memberi Staff Kaprodi hak sinkron semua dosen dan satu dosen. Apakah role `Kaprodi` juga mendapat hak yang sama, atau hanya Staff Kaprodi?
-4. **Role dan hak akses lainnya.** Siapa boleh melihat dan mengubah apa (misalnya siapa yang boleh mengakses Modul 4, siapa yang boleh melihat data dosen lain, siapa yang menyetujui) **belum ditetapkan**. Jangan menebak. Tanyakan sebelum membuat otorisasi.
-5. **Format `nomor_arsip`** otomatis.
-6. **Label status arsip** (Aktif, Inaktif, Habis Retensi masih usulan).
+4. **Hak akses Modul 7.** Siapa boleh melihat data dosen lain dan apa yang boleh diubah belum ditetapkan. Jangan menebak. Hak akses Modul 4 sudah ditetapkan di 6.1.
+5. _(Sudah diputuskan: nomor arsip diisi manual dan wajib. Lihat 6.3.)_
+6. _(Sudah diputuskan: status retensi Aktif, Inaktif, dan Dimusnahkan. Lihat 6.3.)_
 7. **Deploy Next.js.** Tempat deploy aplikasi Next.js belum diputuskan. (Deploy crawler sudah diputuskan: Render, lihat bagian 8.)
 8. **Jeda crawling** (1,5 atau 3 detik).
 9. **Konflik antrean.** Saat "sinkron semua" sedang berjalan, permintaan crawl satu dosen ditolak dengan pesan "sedang berjalan", atau masuk antrean?
 10. **Dosen memicu crawl dirinya saat Staff Kaprodi sedang sinkron semua.** Apakah tetap ditolak atau diantrekan?
 11. **Dosen dengan status `FAILED` atau `PARTIAL`.** Boleh diulang sebelum 7 hari, atau tetap menunggu 7 hari seperti dosen lain?
 12. **Pencabutan sesi.** Karena sesi disimpan di cookie, akun yang dicabut admin SSO baru terasa saat refresh berikutnya gagal. Diterima untuk skala tugas ini. Perlu persetujuan tim.
+13. **Akses Dashboard untuk Dosen.** Dosen boleh membaca Daftar Arsip, tapi belum dikonfirmasi apakah juga boleh melihat Dashboard.
 
 ## 13. Di luar cakupan
 
@@ -307,6 +369,8 @@ Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti ha
 - SerpAPI / Google Scholar lewat API (tidak dipakai lagi).
 - Cron job dan monitor uptime untuk layanan crawler.
 - Tabel sesi di database. Sesi disimpan di cookie terenkripsi.
+- Halaman Users.
+- Upload berkas dan edit massal arsip.
 
 ## 14. Urutan pengerjaan (usulan)
 
@@ -314,6 +378,6 @@ Temuan dari tinjauan `sinta.py` dan `sinta_to_db.py` (kode ini sudah terbukti ha
 2. Sisi klien SSO: `/sso/login`, `/auth/callback`, sesi, refresh, logout.
 3. Alur login pertama dan pengisian `sinta_id`.
 4. `loader.py` versi Postgres dan layanan FastAPI (`/health`, `/sync`), termasuk pengecekan 7 hari, antrean satu job, dan pembersihan `IN_PROGRESS` yang tertinggal. Lalu route Next.js `POST /api/dosen/sinkron`, `POST /api/staff-kaprodi/sinkron`, dan route status.
-5. API Modul 4 (kategori, arsip, `v_arsip`, log aktivitas).
+5. API Modul 4 (kategori, arsip termasuk edit dan validasi, `v_arsip`, log aktivitas).
 6. API Modul 7 (tridarma, lalu pengajaran).
 7. Tinjauan keamanan sisi SSO, lalu tes untuk logika murni (normalisasi nama, hash, status retensi, upsert, aturan 7 hari).
