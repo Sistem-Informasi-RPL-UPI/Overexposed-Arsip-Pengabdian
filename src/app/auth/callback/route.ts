@@ -28,7 +28,16 @@ export async function GET(request: NextRequest) {
   }
 
   // 1. Cegah CSRF
-  if (!tx.state || tx.state !== params.get("state")) {
+  if (!tx.state) {
+    return NextResponse.json(
+      {
+        error:
+          "Cookie sesi login (sso_tx) tidak ditemukan. Pastikan host saat membuka /sso/login sama dengan SSO_REDIRECT_URI.",
+      },
+      { status: 400 }
+    );
+  }
+  if (tx.state !== params.get("state")) {
     return NextResponse.json({ error: "State tidak cocok." }, { status: 400 });
   }
 
