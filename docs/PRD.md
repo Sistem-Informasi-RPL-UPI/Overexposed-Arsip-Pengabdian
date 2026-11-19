@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.5. Berdasarkan ERD versi 6.
+Versi: 1.6. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -12,6 +12,7 @@ Versi: 1.5. Berdasarkan ERD versi 6.
 | 1.3   | 2026-11-17 | Pengisian `sinta_id` untuk Staff Kaprodi dibuat opsional (5.1, 8.1). Pertanyaan terbuka nomor 1 ditutup.                                                                                                                                                                                                                                                                                                       |
 | 1.4   | 2026-11-17 | Sesi disimpan di cookie terenkripsi (refresh token dienkripsi dengan kunci dari `SESSION_SECRET`). Tidak ada tabel sesi. Aturan refresh diperjelas dan risiko pencabutan sesi ditambahkan ke bagian 12.                                                                                                                                                                                                        |
 | 1.5   | 2026-11-18 | Modul 4 dirombak: hak akses per peran (6.1), validasi arsip oleh Kaprodi dengan halaman terpisah, nomor arsip dan nomor surat diisi manual, edit arsip, hapus hanya untuk status Dimusnahkan, status retensi Aktif/Inaktif/Dimusnahkan, tanggal tanpa jam. Log aktivitas diperluas ke modul 4, 7, dan login (sukses dan gagal) dengan kolom `modul`, tanpa `objek_id` dan `ip_address`. Halaman Users dihapus. |
+| 1.6   | 2026-11-19 | Penyesuaian dokumen dengan implementasi auth & RBAC aktual: login hanya `findUnique` ke `dosen` (tidak membuat/menimpa baris sebelum `sinta_id` diisi), mekanisme cookie `app_session` + `sso_refresh` terenkripsi, `src/proxy.ts` (Next.js 16), alias sementara `Admin` ke `Staff Kaprodi`, rute `/sso/logout`, `/auth/refresh`, `/login`, `/api/dev-login`, `/akses-ditolak`, dan RBAC Modul 4 & 7. |
 
 ---
 
@@ -56,20 +57,20 @@ SSO memakai OAuth 2.0 Authorization Code, PKCE (S256), dan access token JWT RS25
 3. Setelah login, SSO mengalihkan ke `redirect_uri` (`/auth/callback`) membawa `code` dan `state`.
 4. Modul memastikan `state` cocok, lalu dari backend menukar `code` ke `{SSO}/api/sso/token` (dengan `client_secret` dan `code_verifier`).
 5. Modul memverifikasi JWT dengan `jose` (`algorithms: ["RS256"]`, `issuer`, `audience`) dan kunci publik dari `{SSO}/api/sso/jwks`.
-6. Modul membuat sesi lokal berupa cookie `httpOnly`, `secure`, `sameSite=lax` yang berisi refresh token **terenkripsi** (AES-256-GCM, kunci turunan dari `SESSION_SECRET`). Tidak ada tabel sesi di database.
+6. Modul membuat sesi lokal tanpa tabel sesi di database menggunakan cookie `httpOnly`, `secure` (di production), `sameSite=lax`: `app_session` (JWT HS256 berumur 15 menit sesuai `exp` access token, memuat `sub`, `dosen_id`, `name`, `email`, `nip`, `role`) dan `sso_refresh` (JWE terenkripsi AES-256-GCM dengan kunci SHA-256 turunan dari `SESSION_SECRET`, berumur 30 hari). Cookie sementara `sso_tx` (10 menit) dipakai untuk menyimpan `state` dan PKCE `code_verifier` selama proses login.
 
 Aturan penting:
 
 - Klaim token: `sub`, `name`, `email`, `nip`, `role`, `iss`, `aud`, `exp`. Pakai `sub` sebagai kunci akun.
-- Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Setiap refresh yang berhasil harus menulis ulang cookie dengan refresh token terbaru. Memakai token lama membatalkan seluruh rantai. Karena sesi disimpan di cookie, tidak ada kunci di server untuk mencegah dua refresh paralel. Refresh hanya dilakukan saat access token habis, dan kegagalan `invalid_grant` diarahkan ke login ulang.
-- Umur sesi lokal sama dengan access token. Saat habis, panggil `/token` dengan `grant_type=refresh_token`. Bila `invalid_grant`, hapus cookie sesi dan arahkan ke `/sso/login`.
-- Logout: hapus cookie sesi lokal, lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
-- Login sukses dan gagal dicatat di `log_aktivitas` dengan `modul = auth`. Saat gagal, `user_id` dan `user_nama` kosong, dan alasan gagal disimpan di `detail`.
+- Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Setiap refresh yang berhasil menulis ulang `app_session` dan `sso_refresh` terenkripsi dengan token terbaru. Memakai token lama membatalkan seluruh rantai. Di dalam satu instance server, pembaruan token dijalankan dengan *single-flight deduplication* (`inFlightRefreshes`), tetapi lintas instance serverless tetap tidak ada lock database terpusat. Refresh hanya dilakukan saat `app_session` habis, dan kegagalan `invalid_grant`/`invalid_client` menghapus cookie sesi dan mengarahkan ke `/sso/login` (gangguan `5xx` atau jaringan tidak menghapus cookie).
+- Pembaruan sesi otomatis berjalan di `src/proxy.ts` (Next.js 16 Proxy) maupun lewat endpoint `POST /auth/refresh`.
+- Logout (`GET /sso/logout`): hapus cookie sesi lokal (`app_session`, `sso_refresh`, `sso_tx`), lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
+- Login sukses dan gagal dicatat di `log_aktivitas` (`aksi`: `login` / `login_gagal`, `objek`: `sso`, `detail`: alasan gagal atau role login). Target skema v1.5 menambahkan kolom `modul = auth` serta mengizinkan `user_id` dan `user_nama` kosong (`null`) saat gagal; selama migrasi `LogAktivitas` belum diterapkan, kasus gagal sementara mencatat UUID nol (`00000000-0000-0000-0000-000000000000`) dan `"Anonim"`.
 - `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
 
-Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, login dengan role baru bisa ditolak SSO. Role `Staff Kaprodi` yang dipakai di bagian 8.1 sudah termasuk dalam daftar role di atas.
+Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, modul sementara menerima **`Admin` sebagai alias `Staff Kaprodi`**, serta **`Umum`** untuk pengunjung tanpa sesi pada rute baca publik (`/tridharma`).
 
-Variabel lingkungan: `SSO_URL` (tanpa `/` akhir, harus sama dengan klaim `iss`), `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, `SESSION_SECRET`.
+Variabel lingkungan: `SSO_URL` (tanpa `/` akhir, harus sama dengan klaim `iss`), `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, `SSO_POST_LOGOUT_URI` (opsional), `SESSION_SECRET`.
 
 `SESSION_SECRET` dipakai untuk mengenkripsi refresh token. Mengubahnya membuat semua sesi aktif tidak bisa dibaca, sehingga semua user harus login ulang. Nilainya berbeda untuk setiap aplikasi dan tidak dibagi antar modul.
 
@@ -83,14 +84,15 @@ Tabel `dosen` **hanya berisi pengguna yang sudah mengisi `sinta_id`**. Mahasiswa
 
 Alur login pertama:
 
-1. Pengguna login lewat SSO. Bila role Mahasiswa, tidak ada baris `dosen` dan tidak diminta `sinta_id`.
-2. Bila role Kaprodi atau Dosen dan belum ada baris `dosen` dengan `user_id = sub`, pengguna diminta mengisi `sinta_id`. Untuk Staff Kaprodi, pengisian `sinta_id` **boleh dilewati**. Staff Kaprodi yang melewati tidak punya baris `dosen`, dan bisa mengisi `sinta_id` kapan saja nanti.
-3. Setelah diisi, baris `dosen` dibuat dengan `user_id = sub`, lalu crawler mengisi `nama`, `afiliasi`, `departemen`, skor, metrik, dan data lain dari SINTA.
-4. Login berikutnya mencari baris `dosen` lewat `user_id`.
+1. Pengguna login lewat SSO (`/sso/login` → `/auth/callback`). Saat callback (maupun `/auth/refresh` dan `/api/dev-login`), backend **tidak membuat baris baru dan tidak menimpa baris `dosen`**, melainkan hanya mencari baris yang sudah ada lewat `findUnique` berdasarkan `user_id = sub`. Bila belum ada, `dosen_id` di sesi bernilai `null`.
+2. Bila role `Mahasiswa` (atau `Umum`), tidak ada baris `dosen` dan tidak diminta `sinta_id`.
+3. Bila role `Kaprodi` atau `Dosen` dan `dosen_id` di sesi masih `null` (belum ada baris `dosen` dengan `user_id = sub`), pengguna diminta mengisi `sinta_id` di aplikasi. Untuk `Staff Kaprodi`, pengisian `sinta_id` **boleh dilewati**. Staff Kaprodi yang melewati tidak punya baris `dosen`, dan bisa mengisi `sinta_id` kapan saja nanti.
+4. Setelah `sinta_id` diisi (lewat endpoint `/api/dosen/sinta-id`), barulah baris `dosen` dibuat dengan `user_id = sub` dan cookie `app_session` diperbarui dengan `dosen_id`, lalu crawler mengisi `nama`, `nama_normal`, `afiliasi`, `departemen`, skor, metrik, dan data lain dari SINTA.
+5. Login berikutnya langsung menemukan baris `dosen` lewat `user_id` dan menyimpan `dosen.id` ke `app_session.dosen_id`.
 
 Aturan:
 
-- `dosen.user_id` wajib dan unik. `dosen.sinta_id` wajib dan unik.
+- `dosen.user_id` wajib dan unik. `dosen.sinta_id` unik (target desain wajib diisi; pada migrasi saat ini sementara nullable agar selaras dengan penyesuaian sebelumnya, dan aman dikembalikan `NOT NULL` setelah endpoint `/api/dosen/sinta-id` aktif).
 - **Tidak ada `email` dan `nip` di tabel `dosen`.** Hubungan ke SSO hanya lewat `user_id`. Tidak ada pencocokan nama ke SSO.
 - `dosen.nama` dan `nama_normal` tetap berasal dari SINTA, karena `nama_normal` dipakai mencocokkan nama ketua dan anggota di `kegiatan_anggota` (juga dari SINTA). Jangan menimpanya dengan nama SSO. Nama tampilan di aplikasi diambil dari sesi SSO.
 - Tiga baris `dosen` di dump lama adalah data uji dari masa sebelum SSO. Buang, jangan di-seed.
@@ -231,7 +233,7 @@ Aturan:
 - Browser **tidak boleh memanggil layanan Python langsung**. Semua lewat route Next.js, supaya `INTERNAL_KEY` tidak pernah sampai ke klien.
 - Hanya satu crawl berjalan pada satu waktu (antrean sederhana), supaya SINTA tidak kebanjiran. Penanganan konflik antrean mengikuti bagian 12 nomor 8–9.
 - Sisa `IN_PROGRESS` yang sudah lama ditandai `FAILED` saat layanan menyala. Jangan dijalankan di setiap request.
-- Layanan Python hanya meng-UPDATE baris `dosen` yang sudah ada (dibuat oleh Next.js saat login pertama). Ia tidak membuat baris `dosen`.
+- Layanan Python hanya meng-UPDATE baris `dosen` yang sudah ada (dibuat oleh Next.js saat dosen atau staff kaprodi mengisi `sinta_id`). Ia tidak membuat baris `dosen`.
 - Layanan Python memakai `DATABASE_URL` berupa URL pooled.
 - Setiap sinkron dicatat di `log_aktivitas` dengan `modul = 7`, termasuk pemicu, `sinta_id` (atau semua dosen), dan status akhir.
 
@@ -294,9 +296,18 @@ sacibiru-modul/
 │  └─ migrations/
 ├─ src/
 │  ├─ app/
-│  │  ├─ sso/login/route.ts
-│  │  ├─ auth/callback/route.ts
+│  │  ├─ login/page.tsx               (gerbang login SSO & dev-login lokal)
+│  │  ├─ akses-ditolak/page.tsx       (halaman 403 RBAC)
+│  │  ├─ tridharma/page.tsx
+│  │  ├─ arsip/page.tsx
+│  │  ├─ sso/
+│  │  │  ├─ login/route.ts
+│  │  │  └─ logout/route.ts
+│  │  ├─ auth/
+│  │  │  ├─ callback/route.ts
+│  │  │  └─ refresh/route.ts
 │  │  └─ api/
+│  │     ├─ dev-login/route.ts        (khusus development, nonaktif di production)
 │  │     ├─ crawler/health/route.ts
 │  │     ├─ dosen/sinta-id/route.ts
 │  │     ├─ dosen/sinkron/route.ts
@@ -312,8 +323,10 @@ sacibiru-modul/
 │  │  ├─ db.ts
 │  │  ├─ session.ts
 │  │  ├─ sso.ts
+│  │  ├─ auth-log.ts
+│  │  ├─ rbac.ts
 │  │  └─ crawler-client.ts
-│  └─ middleware.ts
+│  └─ proxy.ts                        (Next.js 16 Proxy: refresh sesi & RBAC rute)
 ├─ crawler/
 │  ├─ app/
 │  │  ├─ main.py
@@ -329,7 +342,7 @@ sacibiru-modul/
 
 Di `crawler/app/`, `loader.py` mengimpor `sinta.py` dengan `import sinta`. Nama file dan impor harus sama.
 
-**Batas kerja back-end di repo bersama:** pemilik back-end memegang `prisma/`, `src/app/api/**`, `src/app/sso/**`, `src/app/auth/**`, `src/lib/**`, `src/middleware.ts`, dan `crawler/`. File UI dan komponen milik front-end, jangan diedit tanpa diminta.
+**Batas kerja back-end di repo bersama:** pemilik back-end memegang `prisma/`, `src/app/api/**`, `src/app/sso/**`, `src/app/auth/**`, `src/lib/**`, `src/proxy.ts`, dan `crawler/`. File UI dan komponen milik front-end, jangan diedit tanpa diminta.
 
 ## 11. Masalah yang sudah diketahui di kode crawler yang ada
 
@@ -348,7 +361,7 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 1. _(Sudah diputuskan: pengisian `sinta_id` untuk Staff Kaprodi opsional. Lihat 5.1.)_
 2. **`kelas` per tahun ajaran atau per mata kuliah saja.** Saat ini per kelas (mata kuliah + dosen + tahun ajaran + semester).
 3. **Hak crawl Kaprodi.** Bagian 8.1 memberi Staff Kaprodi hak sinkron semua dosen dan satu dosen. Apakah role `Kaprodi` juga mendapat hak yang sama, atau hanya Staff Kaprodi?
-4. **Hak akses Modul 7.** Siapa boleh melihat data dosen lain dan apa yang boleh diubah belum ditetapkan. Jangan menebak. Hak akses Modul 4 sudah ditetapkan di 6.1.
+4. **Hak akses Modul 7.** Aturan final dari pemilik proyek belum dikonfirmasi di PRD, tetapi otorisasi sementara sudah dipasang di `src/lib/rbac.ts` dan `src/proxy.ts` (`Dosen`: CRUD milik sendiri, view dosen lain; `Kaprodi`: CRUD milik sendiri, ACC dosen lain; `Staff Kaprodi`/`Admin`, `Mahasiswa`, `Umum`: view saja). Hak akses Modul 4 sudah ditetapkan di 6.1.
 5. _(Sudah diputuskan: nomor arsip diisi manual dan wajib. Lihat 6.3.)_
 6. _(Sudah diputuskan: status retensi Aktif, Inaktif, dan Dimusnahkan. Lihat 6.3.)_
 7. **Deploy Next.js.** Tempat deploy aplikasi Next.js belum diputuskan. (Deploy crawler sudah diputuskan: Render, lihat bagian 8.)

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { recordAuthLog } from "@/lib/auth-log";
 import { db } from "@/lib/db";
 import {
   encryptRefreshToken,
@@ -21,32 +22,43 @@ export async function GET(request: NextRequest) {
   try {
     tx = JSON.parse(request.cookies.get(SSO_TX_COOKIE)?.value ?? "{}");
   } catch {
-    return NextResponse.json(
-      { error: "Data sesi login (sso_tx) rusak." },
-      { status: 400 }
-    );
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: "Data cookie sesi login (sso_tx) rusak saat callback SSO.",
+    });
+    return NextResponse.json({ error: "Data sesi login (sso_tx) rusak." }, { status: 400 });
   }
 
   // 1. Cegah CSRF
   if (!tx.state) {
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: "Cookie sso_tx tidak ditemukan saat callback SSO.",
+    });
     return NextResponse.json(
       {
-        error:
-          "Cookie sesi login (sso_tx) tidak ditemukan. Pastikan host saat membuka /sso/login sama dengan SSO_REDIRECT_URI.",
+        error: "Cookie sesi login (sso_tx) tidak ditemukan. Pastikan host saat membuka /sso/login sama dengan SSO_REDIRECT_URI.",
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
   if (tx.state !== params.get("state")) {
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: "Parameter state callback SSO tidak cocok.",
+    });
     return NextResponse.json({ error: "State tidak cocok." }, { status: 400 });
   }
 
   // 2. Error handling jika role tidak sesuai atau login dibatalkan di SSO
-  if (params.get("error")) {
-    return NextResponse.json(
-      { error: params.get("error_description") ?? "Akses ditolak." },
-      { status: 403 }
-    );
+  const ssoCallbackError = params.get("error");
+  if (ssoCallbackError) {
+    const errorDescription = params.get("error_description") ?? "Akses ditolak.";
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: `SSO menolak callback (${ssoCallbackError}): ${errorDescription}`,
+    });
+    return NextResponse.json({ error: errorDescription }, { status: 403 });
   }
 
   const { ssoUrl, clientId, clientSecret, redirectUri } = getSsoConfig();
@@ -54,25 +66,25 @@ export async function GET(request: NextRequest) {
   try {
     getSessionSecretKey();
   } catch {
-    return NextResponse.json(
-      { error: "Konfigurasi SESSION_SECRET pada server belum diatur." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Konfigurasi SESSION_SECRET pada server belum diatur." }, { status: 500 });
   }
 
   if (!ssoUrl || !isValidHttpUrl(ssoUrl) || !clientId || !clientSecret || !redirectUri) {
     return NextResponse.json(
-      { error: "Konfigurasi environment SSO pada server belum lengkap atau tidak valid." },
-      { status: 500 }
+      {
+        error: "Konfigurasi environment SSO pada server belum lengkap atau tidak valid.",
+      },
+      { status: 500 },
     );
   }
 
   const code = params.get("code")?.trim();
   if (!code) {
-    return NextResponse.json(
-      { error: "Parameter code tidak ditemukan pada callback SSO." },
-      { status: 400 }
-    );
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: "Parameter code tidak ditemukan pada callback SSO.",
+    });
+    return NextResponse.json({ error: "Parameter code tidak ditemukan pada callback SSO." }, { status: 400 });
   }
 
   try {
@@ -112,6 +124,11 @@ export async function GET(request: NextRequest) {
         ssoDescription,
       });
 
+      await recordAuthLog({
+        aksi: "login_gagal",
+        detail: `Penukaran token SSO gagal (HTTP ${res.status}, ${ssoError ?? "unknown"}): ${ssoDescription ?? "tanpa keterangan"}`,
+      });
+
       return NextResponse.json(
         {
           error: "Login SSO gagal saat menukar token.",
@@ -119,7 +136,7 @@ export async function GET(request: NextRequest) {
           ssoError: ssoError ?? null,
           ssoDescription: ssoDescription ?? null,
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -129,45 +146,29 @@ export async function GET(request: NextRequest) {
     };
 
     // 4. Memverifikasi tanda tangan RS256, penerbit (iss), tujuan (aud), dan masa berlaku JWT
-    const payload = await verifySsoAccessToken(
-      tokens.access_token,
-      ssoUrl,
-      clientId
-    );
+    const payload = await verifySsoAccessToken(tokens.access_token, ssoUrl, clientId);
 
+    // 5. Cari baris dosen berdasarkan user_id (PRD 5.1: tidak membuat/menimpa baris saat login)
     let dosenId: number | null = null;
-
-    // 5. Sinkronisasi ke tabel Dosen jika role-nya Dosen atau Kaprodi
-    if (payload.role === "Dosen" || payload.role === "Kaprodi") {
-      const namaNormal = payload.name.toLowerCase().trim();
-
-      const dosen = await db.dosen.upsert({
+    if (payload.role === "Dosen" || payload.role === "Kaprodi" || payload.role === "Staff Kaprodi" || payload.role === "Admin") {
+      const dosen = await db.dosen.findUnique({
         where: {
           user_id: payload.sub,
         },
-        update: {
-          nama: payload.name,
-          nama_normal: namaNormal,
-        },
-        create: {
-          user_id: payload.sub,
-          nama: payload.name,
-          nama_normal: namaNormal,
+        select: {
+          id: true,
         },
       });
 
-      dosenId = dosen.id;
+      dosenId = dosen?.id ?? null;
     }
 
-    // 6. Catat aktivitas login ke tabel LogAktivitas
-    await db.logAktivitas.create({
-      data: {
-        user_id: payload.sub,
-        user_nama: payload.name,
-        aksi: "LOGIN_SSO",
-        objek: "AUTH",
-        detail: `Login berhasil dengan role ${payload.role}`,
-      },
+    // 6. Catat aktivitas login berhasil ke tabel log_aktivitas
+    await recordAuthLog({
+      aksi: "login",
+      userId: payload.sub,
+      userName: payload.name,
+      detail: `Login SSO berhasil dengan role ${payload.role}`,
     });
 
     // 7. Buat JWT sesi lokal (berlaku 15 menit sesuai masa aktif access_token)
@@ -181,26 +182,18 @@ export async function GET(request: NextRequest) {
         nip: payload.nip ?? null,
         role: payload.role,
       },
-      expTime
+      expTime,
     );
 
     // 8. Redirect ke halaman utama / dashboard sesuai role
-    const redirectPath = payload.role === "Admin" ? "/arsip" : "/tridharma";
+    const redirectPath = payload.role === "Staff Kaprodi" || payload.role === "Admin" ? "/arsip" : "/tridharma";
     const response = NextResponse.redirect(new URL(redirectPath, request.url));
 
-    response.cookies.set(
-      SSO_SESSION_COOKIE,
-      session,
-      getSessionCookieOptions()
-    );
+    response.cookies.set(SSO_SESSION_COOKIE, session, getSessionCookieOptions());
 
     if (tokens.refresh_token) {
       const encryptedRefresh = await encryptRefreshToken(tokens.refresh_token);
-      response.cookies.set(
-        SSO_REFRESH_COOKIE,
-        encryptedRefresh,
-        getRefreshCookieOptions()
-      );
+      response.cookies.set(SSO_REFRESH_COOKIE, encryptedRefresh, getRefreshCookieOptions());
     }
 
     response.cookies.delete(SSO_TX_COOKIE);
@@ -208,9 +201,10 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Kesalahan pada saat callback SSO:", error);
-    return NextResponse.json(
-      { error: "Terjadi kesalahan saat memverifikasi sesi SSO." },
-      { status: 500 }
-    );
+    await recordAuthLog({
+      aksi: "login_gagal",
+      detail: `Verifikasi sesi SSO gagal: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return NextResponse.json({ error: "Terjadi kesalahan saat memverifikasi sesi SSO." }, { status: 500 });
   }
 }

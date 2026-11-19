@@ -21,6 +21,7 @@ export function normalizeRole(role: string | null | undefined): AppRole {
   switch (role) {
     case "Dosen":
     case "Kaprodi":
+    case "Staff Kaprodi":
     case "Admin":
     case "Mahasiswa":
     case "Umum":
@@ -28,6 +29,10 @@ export function normalizeRole(role: string | null | undefined): AppRole {
     default:
       return "Umum";
   }
+}
+
+export function isStaffKaprodiRole(role: AppRole): boolean {
+  return role === "Staff Kaprodi" || role === "Admin";
 }
 
 function matchesPrefix(pathname: string, prefix: string): boolean {
@@ -39,9 +44,25 @@ function hasPathSegment(pathname: string, segmentSet: Set<string>): boolean {
   return segments.some((seg) => segmentSet.has(seg));
 }
 
-function isAccPath(pathname: string): boolean {
+function isValidasiOrAccPath(pathname: string): boolean {
   const segments = pathname.toLowerCase().split("/").filter(Boolean);
-  return segments.includes("acc") || segments.includes("approve");
+  return (
+    segments.includes("validasi") ||
+    segments.includes("acc") ||
+    segments.includes("approve")
+  );
+}
+
+function isKategoriPath(pathname: string): boolean {
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+  return segments.includes("kategori");
+}
+
+function isLogAktivitasPath(pathname: string): boolean {
+  return (
+    matchesPrefix(pathname, "/api/log-aktivitas") ||
+    matchesPrefix(pathname, "/arsip/log-aktivitas")
+  );
 }
 
 /**
@@ -58,15 +79,15 @@ export function evaluateRouteRbac(
   const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
   const upperMethod = method.toUpperCase();
   const isRead = READ_METHODS.has(upperMethod);
-  const isAcc = isAccPath(pathname);
+  const isAcc = isValidasiOrAccPath(pathname);
   const isWriteIntent = !isRead || hasPathSegment(pathname, WRITE_PAGE_SEGMENTS);
 
+  // 1. Modul 7: /tridharma & /api/tridharma
   const isTridharma =
     matchesPrefix(pathname, "/tridharma") ||
     matchesPrefix(pathname, "/api/tridharma");
 
   if (isTridharma) {
-    // ACC hanya untuk Kaprodi (menyetujui data dosen lain)
     if (isAcc) {
       if (!isAuthenticated) {
         return { allowed: false, reason: "unauthenticated", role };
@@ -77,7 +98,6 @@ export function evaluateRouteRbac(
       return { allowed: true, role };
     }
 
-    // Mutasi / halaman form tulis hanya untuk Dosen & Kaprodi (milik sendiri dicek di handler)
     if (isWriteIntent) {
       if (!isAuthenticated) {
         return { allowed: false, reason: "unauthenticated", role };
@@ -88,16 +108,51 @@ export function evaluateRouteRbac(
       return { allowed: false, reason: "forbidden", role };
     }
 
-    // View (/tridharma GET) terbuka untuk Dosen, Kaprodi, Admin, Mahasiswa, dan Umum
+    // View (/tridharma GET) terbuka untuk semua peran termasuk Mahasiswa & Umum
     return { allowed: true, role };
   }
 
+  // 2. Endpoint sinkronisasi & profil dosen (PRD 5.1 & 8.1)
+  if (matchesPrefix(pathname, "/api/staff-kaprodi")) {
+    if (!isAuthenticated) {
+      return { allowed: false, reason: "unauthenticated", role };
+    }
+    if (!isStaffKaprodiRole(role)) {
+      return { allowed: false, reason: "forbidden", role };
+    }
+    return { allowed: true, role };
+  }
+
+  if (matchesPrefix(pathname, "/api/dosen")) {
+    if (!isAuthenticated) {
+      return { allowed: false, reason: "unauthenticated", role };
+    }
+    if (role === "Dosen" || role === "Kaprodi" || isStaffKaprodiRole(role)) {
+      return { allowed: true, role };
+    }
+    return { allowed: false, reason: "forbidden", role };
+  }
+
+  // 3. Log aktivitas (PRD 6.1 & 6.4): hanya Staff Kaprodi dan Kaprodi (baca saja)
+  if (isLogAktivitasPath(pathname)) {
+    if (!isAuthenticated) {
+      return { allowed: false, reason: "unauthenticated", role };
+    }
+    if (!isRead) {
+      return { allowed: false, reason: "forbidden", role };
+    }
+    if (isStaffKaprodiRole(role) || role === "Kaprodi") {
+      return { allowed: true, role };
+    }
+    return { allowed: false, reason: "forbidden", role };
+  }
+
+  // 4. Modul 4: /arsip & /api/arsip (PRD 6.1)
   const isArsip =
     matchesPrefix(pathname, "/arsip") ||
     matchesPrefix(pathname, "/api/arsip");
 
   if (isArsip) {
-    // Umum (belum login maupun role Umum) dan Mahasiswa ditolak di /arsip
     if (!isAuthenticated) {
       return { allowed: false, reason: "unauthenticated", role };
     }
@@ -105,7 +160,7 @@ export function evaluateRouteRbac(
       return { allowed: false, reason: "forbidden", role };
     }
 
-    // ACC arsip hanya oleh Kaprodi
+    // Halaman & API Validasi Arsip: khusus Kaprodi (PRD 6.1 & 6.3)
     if (isAcc) {
       if (role !== "Kaprodi") {
         return { allowed: false, reason: "forbidden", role };
@@ -113,15 +168,26 @@ export function evaluateRouteRbac(
       return { allowed: true, role };
     }
 
-    // CRUD arsip hanya oleh Admin
-    if (isWriteIntent) {
-      if (role !== "Admin") {
+    // Kategori Arsip: Staff Kaprodi CRUD, Kaprodi baca, Dosen ditolak (PRD 6.1)
+    if (isKategoriPath(pathname)) {
+      if (role === "Dosen") {
+        return { allowed: false, reason: "forbidden", role };
+      }
+      if (isWriteIntent && !isStaffKaprodiRole(role)) {
         return { allowed: false, reason: "forbidden", role };
       }
       return { allowed: true, role };
     }
 
-    // View arsip: Admin, Kaprodi, Dosen
+    // Tulis (tambah, ubah, hapus arsip): hanya Staff Kaprodi / Admin (PRD 6.1)
+    if (isWriteIntent) {
+      if (!isStaffKaprodiRole(role)) {
+        return { allowed: false, reason: "forbidden", role };
+      }
+      return { allowed: true, role };
+    }
+
+    // Daftar Arsip & Dashboard (GET): Staff Kaprodi, Kaprodi, Dosen
     return { allowed: true, role };
   }
 
@@ -165,21 +231,27 @@ export function getTridharmaPermissions(
 }
 
 /**
- * Helper izin untuk modul Arsip (/arsip).
+ * Helper izin untuk modul Arsip (/arsip) sesuai PRD v1.5 bagian 6.1 & 6.4.
  */
 export function getArsipPermissions(session: LocalSessionPayload | null) {
   const isAuthenticated = session !== null;
   const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
   const isDenied =
     !isAuthenticated || role === "Mahasiswa" || role === "Umum";
+  const staffKaprodi = isAuthenticated && isStaffKaprodiRole(role);
+  const kaprodi = isAuthenticated && role === "Kaprodi";
 
   return {
     role,
     isAuthenticated,
     canView: !isDenied,
-    canCreate: isAuthenticated && role === "Admin",
-    canUpdate: isAuthenticated && role === "Admin",
-    canDelete: isAuthenticated && role === "Admin",
-    canAcc: isAuthenticated && role === "Kaprodi",
+    canViewKategori: staffKaprodi || kaprodi,
+    canViewLogAktivitas: staffKaprodi || kaprodi,
+    canCreate: staffKaprodi,
+    canUpdate: staffKaprodi,
+    canDelete: staffKaprodi,
+    canManageKategori: staffKaprodi,
+    canValidate: kaprodi,
+    canAcc: kaprodi,
   };
 }
