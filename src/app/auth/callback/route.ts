@@ -155,8 +155,9 @@ export async function GET(request: NextRequest) {
       data: {
         user_id: payload.sub,
         user_nama: payload.name,
-        aksi: "LOGIN_SSO",
-        objek: "AUTH",
+        modul: "auth",
+        aksi: "login",
+        objek: "sso",
         detail: `Login berhasil dengan role ${payload.role}`,
       },
     });

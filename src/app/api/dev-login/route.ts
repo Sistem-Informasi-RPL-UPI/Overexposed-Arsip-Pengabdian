@@ -86,8 +86,9 @@ export async function GET(request: NextRequest) {
       data: {
         user_id: dummyUser.sub,
         user_nama: dummyUser.name,
-        aksi: "LOGIN_DEV",
-        objek: "AUTH",
+        modul: "auth",
+        aksi: "login",
+        objek: "sso",
         detail: `Login sementara berhasil dengan role ${role}`,
       },
     });
