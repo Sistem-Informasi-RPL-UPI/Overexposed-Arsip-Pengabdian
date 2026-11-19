@@ -1,7 +1,5 @@
 import { db } from "@/lib/db";
 
-const ANONYMOUS_USER_UUID = "00000000-0000-0000-0000-000000000000";
-
 interface AuthLogInput {
   aksi: "login" | "login_gagal";
   userId?: string | null;
@@ -10,9 +8,9 @@ interface AuthLogInput {
 }
 
 /**
- * Mencatat aktivitas login sukses/gagal ke tabel log_aktivitas sesuai PRD 4 & 6.4.
- * Catatan: selama kolom user_id/user_nama di schema.prisma masih NOT NULL dan kolom
- * `modul` belum ditambahkan, kegagalan login memakai UUID nol & "Anonim" sebagai fallback.
+ * Mencatat login sukses dan gagal ke log_aktivitas (PRD 4 dan 6.4).
+ * Untuk login gagal, userId dan userName dikosongkan (null).
+ * Kegagalan mencatat log tidak membatalkan alur login.
  */
 export async function recordAuthLog({
   aksi,
@@ -23,8 +21,9 @@ export async function recordAuthLog({
   try {
     await db.logAktivitas.create({
       data: {
-        user_id: userId ?? ANONYMOUS_USER_UUID,
-        user_nama: userName ?? "Anonim",
+        user_id: userId ?? null,
+        user_nama: userName ?? null,
+        modul: "auth",
         aksi,
         objek: "sso",
         detail,

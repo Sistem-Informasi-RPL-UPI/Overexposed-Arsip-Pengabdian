@@ -105,15 +105,6 @@ export async function GET(request: NextRequest) {
       dosenId = dosen?.id ?? null;
     }
 
-    await db.logAktivitas.create({
-      data: {
-        user_id: dummyUser.sub,
-        user_nama: dummyUser.name,
-        modul: "auth",
-        aksi: "login",
-        objek: "sso",
-        detail: `Login sementara berhasil dengan role ${role}`,
-      },
     await recordAuthLog({
       aksi: "login",
       userId: dummyUser.sub,

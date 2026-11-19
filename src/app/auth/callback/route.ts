@@ -164,15 +164,11 @@ export async function GET(request: NextRequest) {
     }
 
     // 6. Catat aktivitas login ke tabel LogAktivitas
-    await db.logAktivitas.create({
-      data: {
-        user_id: payload.sub,
-        user_nama: payload.name,
-        modul: "auth",
-        aksi: "login",
-        objek: "sso",
-        detail: `Login berhasil dengan role ${payload.role}`,
-      },
+    await recordAuthLog({
+      aksi: "login",
+      userId: payload.sub,
+      userName: payload.name,
+      detail: `Login berhasil dengan role ${payload.role}`,
     });
 
     // 7. Buat JWT sesi lokal (berlaku 15 menit sesuai masa aktif access_token)
