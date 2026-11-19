@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.6. Berdasarkan ERD versi 6.
+Versi: 1.7. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,6 +13,7 @@ Versi: 1.6. Berdasarkan ERD versi 6.
 | 1.4   | 2026-11-17 | Sesi disimpan di cookie terenkripsi (refresh token dienkripsi dengan kunci dari `SESSION_SECRET`). Tidak ada tabel sesi. Aturan refresh diperjelas dan risiko pencabutan sesi ditambahkan ke bagian 12.                                                                                                                                                                                                        |
 | 1.5   | 2026-11-18 | Modul 4 dirombak: hak akses per peran (6.1), validasi arsip oleh Kaprodi dengan halaman terpisah, nomor arsip dan nomor surat diisi manual, edit arsip, hapus hanya untuk status Dimusnahkan, status retensi Aktif/Inaktif/Dimusnahkan, tanggal tanpa jam. Log aktivitas diperluas ke modul 4, 7, dan login (sukses dan gagal) dengan kolom `modul`, tanpa `objek_id` dan `ip_address`. Halaman Users dihapus. |
 | 1.6   | 2026-11-19 | Penyesuaian dokumen dengan implementasi auth & RBAC aktual: login hanya `findUnique` ke `dosen` (tidak membuat/menimpa baris sebelum `sinta_id` diisi), mekanisme cookie `app_session` + `sso_refresh` terenkripsi, `src/proxy.ts` (Next.js 16), alias sementara `Admin` ke `Staff Kaprodi`, rute `/sso/logout`, `/auth/refresh`, `/login`, `/api/dev-login`, `/akses-ditolak`, dan RBAC Modul 4 & 7. |
+| 1.7   | 2026-11-19 | Pengisian `sinta_id` (5.1 langkah 4) diperjelas: endpoint hanya menambah baris `dosen`, crawl tidak otomatis dan hanya berjalan saat tombol sinkron ditekan. |
 
 ---
 
@@ -87,7 +88,7 @@ Alur login pertama:
 1. Pengguna login lewat SSO (`/sso/login` → `/auth/callback`). Saat callback (maupun `/auth/refresh` dan `/api/dev-login`), backend **tidak membuat baris baru dan tidak menimpa baris `dosen`**, melainkan hanya mencari baris yang sudah ada lewat `findUnique` berdasarkan `user_id = sub`. Bila belum ada, `dosen_id` di sesi bernilai `null`.
 2. Bila role `Mahasiswa` (atau `Umum`), tidak ada baris `dosen` dan tidak diminta `sinta_id`.
 3. Bila role `Kaprodi` atau `Dosen` dan `dosen_id` di sesi masih `null` (belum ada baris `dosen` dengan `user_id = sub`), pengguna diminta mengisi `sinta_id` di aplikasi. Untuk `Staff Kaprodi`, pengisian `sinta_id` **boleh dilewati**. Staff Kaprodi yang melewati tidak punya baris `dosen`, dan bisa mengisi `sinta_id` kapan saja nanti.
-4. Setelah `sinta_id` diisi (lewat endpoint `/api/dosen/sinta-id`), barulah baris `dosen` dibuat dengan `user_id = sub` dan cookie `app_session` diperbarui dengan `dosen_id`, lalu crawler mengisi `nama`, `nama_normal`, `afiliasi`, `departemen`, skor, metrik, dan data lain dari SINTA.
+4. Setelah `sinta_id` diisi (lewat endpoint `/api/dosen/sinta-id`), barulah baris `dosen` dibuat dengan `user_id = sub` dan cookie `app_session` diperbarui dengan `dosen_id`. Endpoint ini **hanya menambah baris `dosen`**. Crawl tidak dijalankan otomatis. Kolom `nama`, `nama_normal`, `afiliasi`, `departemen`, skor, dan metrik tetap kosong sampai pengguna menekan tombol sinkron (8.1). Baris baru itu belum punya `sync_status` dan `last_synced_at`, sehingga aturan 7 hari langsung membolehkan sinkron pertama.
 5. Login berikutnya langsung menemukan baris `dosen` lewat `user_id` dan menyimpan `dosen.id` ke `app_session.dosen_id`.
 
 Aturan:
