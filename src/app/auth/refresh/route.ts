@@ -64,7 +64,12 @@ export async function POST(request: NextRequest) {
     const { payload, refreshToken: nextRefreshToken } = result;
 
     let dosenId: number | null = null;
-    if (payload.role === "Dosen" || payload.role === "Kaprodi") {
+    if (
+      payload.role === "Dosen" ||
+      payload.role === "Kaprodi" ||
+      payload.role === "Staff Kaprodi" ||
+      payload.role === "Admin"
+    ) {
       const dosen = await db.dosen.findUnique({
         where: { user_id: String(payload.sub) },
         select: { id: true },
