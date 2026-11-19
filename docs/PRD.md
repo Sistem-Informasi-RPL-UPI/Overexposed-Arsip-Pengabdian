@@ -250,6 +250,7 @@ Variabel lingkungan:
 | Peran         | Semua dosen | Satu dosen (pilih) | Diri sendiri                      |
 | ------------- | ----------- | ------------------ | --------------------------------- |
 | Staff Kaprodi | ya          | ya                 | ya, bila sudah mengisi `sinta_id` |
+| Kaprodi       | tidak       | tidak              | ya                                |
 | Dosen         | tidak       | tidak              | ya                                |
 | Mahasiswa     | tidak       | tidak              | tidak (tidak punya baris `dosen`) |
 
