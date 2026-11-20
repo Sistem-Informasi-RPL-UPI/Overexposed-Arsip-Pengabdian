@@ -7,9 +7,9 @@ import {
   parseKategoriIdParam,
   parseKategoriJsonBody,
   parsePatchKategoriPayload,
-  recordKategoriLog,
   requireKategoriManager,
 } from "@/lib/kategori";
+import { catatLog } from "@/lib/log-aktivitas";
 
 export async function PATCH(
   request: NextRequest,
@@ -52,7 +52,14 @@ export async function PATCH(
       select: KATEGORI_PUBLIC_SELECT,
     });
 
-    await recordKategoriLog(auth.session, "ubah", `${kategori.kode} - ${kategori.nama}`);
+    await catatLog({
+      userId: auth.session.sub,
+      userNama: auth.session.name,
+      modul: "4",
+      aksi: "ubah",
+      objek: "kategori",
+      detail: `${kategori.kode} - ${kategori.nama}`,
+    });
 
     return NextResponse.json({ message: "Kategori berhasil diperbarui.", data: kategori });
   } catch (error) {
@@ -105,7 +112,14 @@ export async function DELETE(
     }
 
     await db.kategori.delete({ where: { id } });
-    await recordKategoriLog(auth.session, "hapus", `${existing.kode} - ${existing.nama}`);
+    await catatLog({
+      userId: auth.session.sub,
+      userNama: auth.session.name,
+      modul: "4",
+      aksi: "hapus",
+      objek: "kategori",
+      detail: `${existing.kode} - ${existing.nama}`,
+    });
 
     return NextResponse.json({
       message: "Kategori berhasil dihapus.",

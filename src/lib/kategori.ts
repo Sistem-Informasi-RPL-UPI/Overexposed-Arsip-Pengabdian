@@ -357,24 +357,3 @@ export function parsePatchKategoriPayload(
 
   return { ok: true, data };
 }
-
-export async function recordKategoriLog(
-  session: LocalSessionPayload,
-  aksi: "tambah" | "ubah" | "hapus",
-  detail: string,
-): Promise<void> {
-  try {
-    await db.logAktivitas.create({
-      data: {
-        user_id: session.sub,
-        user_nama: session.name,
-        modul: "4",
-        aksi,
-        objek: "kategori",
-        detail,
-      },
-    });
-  } catch (logError) {
-    console.error(`Log aktivitas kategori (${aksi}):`, logError);
-  }
-}

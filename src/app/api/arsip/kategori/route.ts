@@ -8,10 +8,10 @@ import {
   KATEGORI_PUBLIC_SELECT,
   parseCreateKategoriPayload,
   parseKategoriJsonBody,
-  recordKategoriLog,
   requireKategoriManager,
   requireKategoriViewer,
 } from "@/lib/kategori";
+import { catatLog } from "@/lib/log-aktivitas";
 
 const KATEGORI_PAGE_SIZE = 6;
 
@@ -84,7 +84,14 @@ export async function POST(request: NextRequest) {
       select: KATEGORI_PUBLIC_SELECT,
     });
 
-    await recordKategoriLog(auth.session, "tambah", `${kategori.kode} - ${kategori.nama}`);
+    await catatLog({
+      userId: auth.session.sub,
+      userNama: auth.session.name,
+      modul: "4",
+      aksi: "tambah",
+      objek: "kategori",
+      detail: `${kategori.kode} - ${kategori.nama}`,
+    });
 
     return NextResponse.json(
       { message: "Kategori berhasil ditambahkan.", data: kategori },
