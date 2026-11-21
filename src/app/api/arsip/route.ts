@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         judul: parsed.data.judul,
         kategori_id: parsed.data.kategori_id,
         tanggal_arsip: parsed.data.tanggal_arsip,
-        pencipta_unit: parsed.data.pencipta_unit,
+        pencipta_unit: auth.session.name,
         retensi_aktif_tahun: retensi.retensi_aktif_tahun,
         retensi_inaktif_tahun: retensi.retensi_inaktif_tahun,
         link_berkas: parsed.data.link_berkas,

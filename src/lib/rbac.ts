@@ -124,8 +124,8 @@ export function evaluateRouteRbac(pathname: string, method: string, session: Loc
     return { allowed: false, reason: "forbidden", role };
   }
 
-  // 4. Modul 4: /arsip & /api/arsip (PRD 6.1)
-  const isArsip = matchesPrefix(pathname, "/arsip") || matchesPrefix(pathname, "/api/arsip");
+  // 4. Modul 4: /arsip, /api/arsip, & /api/dashboard (PRD 6.1)
+  const isArsip = matchesPrefix(pathname, "/arsip") || matchesPrefix(pathname, "/api/arsip") || matchesPrefix(pathname, "/api/dashboard");
 
   if (isArsip) {
     if (!isAuthenticated) {

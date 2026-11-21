@@ -10,7 +10,7 @@ export async function GET() {
 
   if (!session) {
     return NextResponse.json(
-      { authenticated: false, error: "Silakan login terlebih dahulu." },
+      { authenticated: false, message: "Silakan login terlebih dahulu." },
       { status: 401, headers: NO_STORE },
     );
   }

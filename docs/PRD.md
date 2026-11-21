@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.7. Berdasarkan ERD versi 6.
+Versi: 1.9. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,6 +14,8 @@ Versi: 1.7. Berdasarkan ERD versi 6.
 | 1.5   | 2026-11-18 | Modul 4 dirombak: hak akses per peran (6.1), validasi arsip oleh Kaprodi dengan halaman terpisah, nomor arsip dan nomor surat diisi manual, edit arsip, hapus hanya untuk status Dimusnahkan, status retensi Aktif/Inaktif/Dimusnahkan, tanggal tanpa jam. Log aktivitas diperluas ke modul 4, 7, dan login (sukses dan gagal) dengan kolom `modul`, tanpa `objek_id` dan `ip_address`. Halaman Users dihapus. |
 | 1.6   | 2026-11-19 | Penyesuaian dokumen dengan implementasi auth & RBAC aktual: login hanya `findUnique` ke `dosen` (tidak membuat/menimpa baris sebelum `sinta_id` diisi), mekanisme cookie `app_session` + `sso_refresh` terenkripsi, `src/proxy.ts` (Next.js 16), alias sementara `Admin` ke `Staff Kaprodi`, rute `/sso/logout`, `/auth/refresh`, `/login`, `/api/dev-login`, `/akses-ditolak`, dan RBAC Modul 4 & 7. |
 | 1.7   | 2026-11-19 | Pengisian `sinta_id` (5.1 langkah 4) diperjelas: endpoint hanya menambah baris `dosen`, crawl tidak otomatis dan hanya berjalan saat tombol sinkron ditekan. |
+| 1.8   | 2026-11-21 | Modul 4 disesuaikan dengan implementasi: endpoint kategori dan arsip (6.7) berada di `/api/arsip/kategori` dan memakai `PATCH`, pencarian arsip mencakup nomor arsip, edit arsip mengosongkan `catatan_validasi`, retensi kategori minimal 1 tahun. Konvensi respons galat JSON memakai kunci `message`. Log login gagal memakai `null` (fallback UUID nol dihapus). Struktur folder dan status pengerjaan diperbarui. |
+| 1.9   | 2026-11-21 | Dosen boleh melihat Dashboard (bagian 12 nomor 13 ditutup). Endpoint `GET /api/dashboard` ditambahkan (6.3, 6.7). `pencipta_unit` arsip diisi otomatis dari nama akun yang login dan tidak bisa diubah. |
 
 ---
 
@@ -66,7 +68,7 @@ Aturan penting:
 - Umur access token 15 menit, refresh token 30 hari dan **dirotasi** setiap dipakai. Setiap refresh yang berhasil menulis ulang `app_session` dan `sso_refresh` terenkripsi dengan token terbaru. Memakai token lama membatalkan seluruh rantai. Di dalam satu instance server, pembaruan token dijalankan dengan *single-flight deduplication* (`inFlightRefreshes`), tetapi lintas instance serverless tetap tidak ada lock database terpusat. Refresh hanya dilakukan saat `app_session` habis, dan kegagalan `invalid_grant`/`invalid_client` menghapus cookie sesi dan mengarahkan ke `/sso/login` (gangguan `5xx` atau jaringan tidak menghapus cookie).
 - Pembaruan sesi otomatis berjalan di `src/proxy.ts` (Next.js 16 Proxy) maupun lewat endpoint `POST /auth/refresh`.
 - Logout (`GET /sso/logout`): hapus cookie sesi lokal (`app_session`, `sso_refresh`, `sso_tx`), lalu alihkan ke `{SSO}/api/sso/logout` dengan `client_id` dan `post_logout_redirect_uri`.
-- Login sukses dan gagal dicatat di `log_aktivitas` (`aksi`: `login` / `login_gagal`, `objek`: `sso`, `detail`: alasan gagal atau role login). Target skema v1.5 menambahkan kolom `modul = auth` serta mengizinkan `user_id` dan `user_nama` kosong (`null`) saat gagal; selama migrasi `LogAktivitas` belum diterapkan, kasus gagal sementara mencatat UUID nol (`00000000-0000-0000-0000-000000000000`) dan `"Anonim"`.
+- Login sukses dan gagal dicatat di `log_aktivitas` (`modul`: `auth`, `aksi`: `login` / `login_gagal`, `objek`: `sso`, `detail`: alasan gagal atau role login). Saat gagal, `user_id` dan `user_nama` bernilai `null`. Penulisan log lewat helper `catatLog` (`src/lib/log-aktivitas.ts`); `recordAuthLog` (`src/lib/auth-log.ts`) adalah pintasan untuk login. Kegagalan menulis log hanya dicatat ke console dan tidak membatalkan operasi utama. Galat konfigurasi di callback (`SESSION_SECRET` atau konfigurasi SSO kosong) belum dicatat sebagai `login_gagal`.
 - `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
 
 Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, modul sementara menerima **`Admin` sebagai alias `Staff Kaprodi`**, serta **`Umum`** untuk pengunjung tanpa sesi pada rute baca publik (`/tridharma`).
@@ -142,10 +144,10 @@ Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip (Staff
 | ------------- | --------- | ------------ | -------- | -------------- | ------------- | -------------------------------------- |
 | Staff Kaprodi | ya        | ya           | ya       | tidak          | ya            | tambah, ubah, hapus arsip dan kategori |
 | Kaprodi       | ya        | ya           | ya       | ya             | ya            | hanya validasi arsip                   |
-| Dosen         | ya\*      | ya           | tidak    | tidak          | tidak         | tidak ada                              |
+| Dosen         | ya        | ya           | tidak    | tidak          | tidak         | tidak ada                              |
 | Mahasiswa     | tidak     | tidak        | tidak    | tidak          | tidak         | tidak ada akses ke modul arsip         |
 
-\* Akses Dashboard untuk Dosen belum dikonfirmasi (bagian 12 nomor 13).
+Dosen boleh melihat Dashboard (diputuskan 2026-11-21, bagian 12 nomor 13).
 
 - Kaprodi hanya satu orang.
 - Hak tulis dicek di server, bukan hanya disembunyikan di UI.
@@ -154,7 +156,10 @@ Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip (Staff
 
 - `kategori`: `kode` unik (contoh KEU, maksimal 5 karakter huruf kapital), `nama`, `retensi_aktif_tahun`, `retensi_inaktif_tahun`, `keterangan`. Tidak ada ikon.
 - Form tambah dan edit memakai field yang sama. Edit dilakukan lewat klik baris di front-end.
-- Hapus hanya bisa dilakukan kalau kategori tidak dipakai arsip (`ON DELETE RESTRICT`).
+- Hapus hanya bisa dilakukan kalau kategori tidak dipakai arsip (`ON DELETE RESTRICT`). Bila masih dipakai, API membalas 409.
+- Kode hanya huruf A-Z (tanpa angka dan tanda baca). Huruf kecil yang dikirim diubah menjadi kapital, dan keunikan dicek tanpa membedakan huruf besar kecil.
+- `retensi_aktif_tahun` dan `retensi_inaktif_tahun` wajib bilangan bulat minimal 1 (maksimal 32767).
+- Daftar kategori memuat `jumlah_arsip` per kategori, bisa dicari lewat kode atau nama (tanpa membedakan huruf besar kecil), difilter masa retensi, dan dibagi 6 baris per halaman.
 - Data awal: ADM Arsip Administrasi (2/3), HRD Arsip HRD (2/5), KEU Arsip Keuangan (2/8), OPS Arsip Operasional (2/3), PRG Arsip Program (2/3), RND Arsip RnD (3/5), SLS Arsip Sales (2/3), TI Arsip Teknologi Informasi (2/3). Angka dalam kurung adalah retensi aktif/inaktif (tahun).
 
 ### 6.3 Arsip
@@ -164,22 +169,28 @@ Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip (Staff
   - `nomor_arsip`: wajib, diisi manual, unik.
   - `nomor_surat`: wajib.
   - `judul`, `kategori_id`, `tanggal_arsip` (tanggal saja, tanpa jam), `pencipta_unit`, `keterangan`, `link_berkas`.
-  - `retensi_aktif_tahun` dan `retensi_inaktif_tahun`: salinan dari kategori saat dibuat, boleh diubah.
+  - `pencipta_unit`: diisi otomatis dengan nama akun yang membuat arsip (klaim `name` dari sesi SSO). Nilai yang dikirim klien diabaikan, baik saat tambah maupun ubah.
+  - `retensi_aktif_tahun` dan `retensi_inaktif_tahun`: salinan dari kategori saat dibuat, boleh diubah. Bila diisi sendiri, nilainya bilangan bulat 0 sampai 32767 (0 berarti fase itu langsung berakhir di hari arsip).
+  - `link_berkas` wajib berupa URL `http://` atau `https://` yang valid.
   - `status_validasi`: Pending, Diterima, atau Ditolak.
   - `catatan_validasi`: wajib diisi saat Ditolak.
   - `dibuat_oleh` (`sub` SSO), `created_at`, `updated_at`.
 - **Alur validasi:**
   1. Arsip yang dibuat Staff Kaprodi otomatis berstatus Pending.
   2. Kaprodi menyetujui (Diterima) atau menolak (Ditolak, dengan catatan).
-  3. Setiap perubahan isi arsip, termasuk arsip yang Ditolak, mengembalikan status ke Pending.
+  3. Setiap perubahan isi arsip, termasuk arsip yang Ditolak, mengembalikan status ke Pending dan mengosongkan `catatan_validasi`. Reset ini terjadi pada setiap permintaan ubah yang berhasil, walaupun nilai yang dikirim sama dengan sebelumnya.
 - **Halaman Validasi Arsip** terpisah, khusus Kaprodi, dengan tab Pending, Diterima, dan Ditolak.
 - **Status retensi** dihitung saat dibaca, tidak disimpan. Ada tiga nilai:
   - Aktif: sebelum habis retensi aktif.
   - Inaktif: sudah habis retensi aktif, belum habis retensi inaktif.
   - Dimusnahkan: sudah habis keduanya.
-- **Hapus arsip** hanya bisa dilakukan kalau status retensinya Dimusnahkan. Hapus permanen.
+- **Hapus arsip** hanya bisa dilakukan kalau status retensinya Dimusnahkan. Hapus permanen. Bila belum Dimusnahkan, API membalas 409 dengan menyebut status retensi saat ini.
+- **Tanggal** pada JSON (`tanggal_arsip`, `tanggal_habis_aktif`, `tanggal_habis_inaktif`) dikirim sebagai ISO UTC (`YYYY-MM-DDT00:00:00.000Z`). Front-end menampilkan bagian tanggalnya saja. Pengecualian: Dashboard mengirim `tanggal_arsip` langsung sebagai `YYYY-MM-DD`. Status retensi dihitung dengan tanggal UTC, sama dengan `v_arsip`.
+- **Daftar dan detail.** Daftar membaca dari view `v_arsip` dan tidak memuat status retensi maupun status validasi. Detail memuat `status_retensi`, `tanggal_habis_aktif`, `tanggal_habis_inaktif`, `status_validasi`, dan `catatan_validasi`.
 - **Dashboard** menampilkan total arsip yang status retensinya Aktif, dan lima arsip terbaru. Badge Masuk/Keluar dan field pengirim dihapus.
-- **Daftar Arsip**: pencarian, filter kategori, filter tahun, reset filter, tombol tambah arsip, dan tabel dengan kolom nomor arsip, judul, kategori, masa retensi (aktif dan inaktif), serta aksi detail dan hapus.
+  - `totalArsip`: jumlah arsip berstatus retensi Aktif (dibaca dari `v_arsip`), tidak terpengaruh pencarian.
+  - `aktivitasTerbaru`: arsip diurutkan dari `created_at` terbaru, 5 per halaman. Isinya nomor arsip, judul, kategori (kode dan nama), nomor surat, dan tanggal arsip tanpa jam. Bisa dicari lewat judul, nomor surat, atau nomor arsip, dan memuat `pagination.total` untuk teks "Menampilkan X dari Y".
+- **Daftar Arsip**: pencarian (judul, nomor surat, dan nomor arsip, tanpa membedakan huruf besar kecil), filter kategori, filter tahun, reset filter, tombol tambah arsip, dan tabel dengan kolom nomor arsip, judul, kategori, masa retensi (aktif dan inaktif), serta aksi detail dan hapus. Paginasi: bawaan 10 baris, maksimal 50 per halaman.
 
 ### 6.4 Log aktivitas
 
@@ -198,6 +209,27 @@ Web untuk mengelola arsip surat dan dokumen. Menu: Dashboard, Input Arsip (Staff
 - Modul 4 **tidak punya tabel user**. Data user diambil dari sesi SSO.
 - Retensi disalin ke arsip saat dibuat, supaya perubahan kategori tidak mengubah arsip lama.
 - Kategori yang masih dipakai arsip tidak bisa dihapus.
+
+### 6.7 Endpoint Modul 4 (kondisi saat ini)
+
+Hak akses dicek dua lapis: di `src/proxy.ts` (per rute dan method) dan di handler (`getArsipPermissions`). `Admin` diperlakukan sama dengan Staff Kaprodi (lihat bagian 4). Kategori berada di `/api/arsip/kategori` dan memakai `PATCH` untuk ubah.
+
+| Method dan path                  | Peran                       | Keterangan                                                                                                    |
+| -------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET /api/arsip/kategori`        | Staff Kaprodi, Kaprodi      | Parameter `search`, `retensi`, `page`. Memuat `jumlah_arsip`.                                                 |
+| `POST /api/arsip/kategori`       | Staff Kaprodi               | 201. 409 bila kode sudah dipakai.                                                                             |
+| `PATCH /api/arsip/kategori/[id]` | Staff Kaprodi               | Hanya field yang dikirim. 404 bila tidak ada, 409 bila kode dipakai kategori lain.                            |
+| `DELETE /api/arsip/kategori/[id]`| Staff Kaprodi               | 409 bila masih dipakai arsip.                                                                                 |
+| `GET /api/arsip`                 | Staff Kaprodi, Kaprodi, Dosen | Parameter `search`, `kategori` atau `kategoriId`, `tahun`, `page`, `pageSize`.                               |
+| `GET /api/arsip/[id]`            | Staff Kaprodi, Kaprodi, Dosen | Detail dengan status retensi dan validasi.                                                                    |
+| `POST /api/arsip`                | Staff Kaprodi               | 201. Status Pending, retensi disalin dari kategori bila tidak diisi, `pencipta_unit` dari nama akun. 409 bila nomor arsip sudah dipakai. |
+| `PATCH /api/arsip/[id]`          | Staff Kaprodi               | Hanya field yang dikirim. Status kembali ke Pending. 409 bila nomor arsip dipakai arsip lain.                 |
+| `DELETE /api/arsip/[id]`         | Staff Kaprodi               | Hanya bila status retensi Dimusnahkan, selain itu 409.                                                        |
+| `GET /api/dashboard`             | Staff Kaprodi, Kaprodi, Dosen | Parameter `search`, `page`, `pageSize` (bawaan 5). Respons `{ totalArsip, aktivitasTerbaru: { items, pagination } }`. |
+
+Mahasiswa dan Umum tidak punya akses ke semua rute di atas. Setiap penambahan, perubahan, dan penghapusan tercatat di `log_aktivitas` (`modul = 4`).
+
+**Konvensi respons.** Semua galat JSON memakai satu kunci: `{ "message": "..." }`, termasuk 401 dan 403 dari `proxy.ts`. Respons sukses tulis berbentuk `{ "message": "...", "data": { ... } }`, daftar berbentuk `{ "items": [...], "pagination": { "page", "pageSize", "total", "totalPages" } }`, dan detail berbentuk `{ "data": { ... } }`. Rute baru mengikuti konvensi ini.
 
 ## 7. Model data
 
@@ -309,6 +341,8 @@ sacibiru-modul/
 │  │  │  ├─ callback/route.ts
 │  │  │  └─ refresh/route.ts
 │  │  └─ api/
+│  │     ├─ me/route.ts               (data sesi aktif, 401 bila belum login)
+│  │     ├─ dashboard/route.ts        (GET dashboard arsip)
 │  │     ├─ dev-login/route.ts        (khusus development, nonaktif di production)
 │  │     ├─ crawler/health/route.ts
 │  │     ├─ dosen/sinta-id/route.ts
@@ -317,15 +351,24 @@ sacibiru-modul/
 │  │     ├─ staff-kaprodi/sinkron/route.ts
 │  │     ├─ log-aktivitas/route.ts
 │  │     ├─ arsip/
-│  │     │  ├─ kategori/...
-│  │     │  └─ validasi/...
+│  │     │  ├─ route.ts               (GET daftar, POST tambah)
+│  │     │  ├─ [id]/route.ts          (GET detail, PATCH ubah, DELETE hapus)
+│  │     │  ├─ kategori/
+│  │     │  │  ├─ route.ts            (GET daftar, POST tambah)
+│  │     │  │  └─ [id]/route.ts       (PATCH ubah, DELETE hapus)
+│  │     │  └─ validasi/...           (belum ada)
 │  │     └─ tridarma/
 │  │        └─ pengajaran/...
 │  ├─ lib/
 │  │  ├─ db.ts
 │  │  ├─ session.ts
 │  │  ├─ sso.ts
-│  │  ├─ auth-log.ts
+│  │  ├─ auth-log.ts              (pintasan catatLog untuk login)
+│  │  ├─ log-aktivitas.ts         (helper catatLog)
+│  │  ├─ retensi.ts               (hitungRetensi: logika murni status retensi)
+│  │  ├─ arsip.ts                 (validasi dan query arsip)
+│  │  ├─ kategori.ts              (validasi dan query kategori)
+│  │  ├─ dashboard.ts             (query dashboard arsip)
 │  │  ├─ rbac.ts
 │  │  └─ crawler-client.ts
 │  └─ proxy.ts                        (Next.js 16 Proxy: refresh sesi & RBAC rute)
@@ -335,9 +378,16 @@ sacibiru-modul/
 │  │  ├─ sinta.py
 │  │  ├─ loader.py
 │  │  └─ config.py
+│  ├─ tests/
+│  │  └─ test_norm_nama.py        (unittest)
 │  ├─ requirements.txt
 │  ├─ Dockerfile
 │  └─ .env.example
+├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
+│  ├─ helpers/fixtures.ts
+│  ├─ lib/                        (retensi, log-aktivitas, kategori, arsip, dashboard, rbac-arsip)
+│  └─ api/                        (kategori, arsip, dashboard: handler dengan database tiruan)
+├─ vitest.config.ts
 ├─ .env.example
 └─ package.json
 ```
@@ -372,7 +422,7 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 10. **Dosen memicu crawl dirinya saat Staff Kaprodi sedang sinkron semua.** Apakah tetap ditolak atau diantrekan?
 11. **Dosen dengan status `FAILED` atau `PARTIAL`.** Boleh diulang sebelum 7 hari, atau tetap menunggu 7 hari seperti dosen lain?
 12. **Pencabutan sesi.** Karena sesi disimpan di cookie, akun yang dicabut admin SSO baru terasa saat refresh berikutnya gagal. Diterima untuk skala tugas ini. Perlu persetujuan tim.
-13. **Akses Dashboard untuk Dosen.** Dosen boleh membaca Daftar Arsip, tapi belum dikonfirmasi apakah juga boleh melihat Dashboard.
+13. _(Sudah diputuskan 2026-11-21: Dosen boleh melihat Dashboard. Lihat 6.1.)_
 
 ## 13. Di luar cakupan
 
@@ -396,3 +446,5 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 5. API Modul 4 (kategori, arsip termasuk edit dan validasi, `v_arsip`, log aktivitas).
 6. API Modul 7 (tridarma, lalu pengajaran).
 7. Tinjauan keamanan sisi SSO, lalu tes untuk logika murni (normalisasi nama, hash, status retensi, upsert, aturan 7 hari).
+
+**Status Modul 4 (2026-11-21).** Sudah ada beserta tes: perubahan skema dan `v_arsip`, `hitungRetensi`, helper log aktivitas, API kategori, API arsip, dan dashboard (6.7). Belum ada: validasi arsip oleh Kaprodi, endpoint daftar log aktivitas, dan profil saya. Perintah tes: `npm test` (Vitest) dan `python -m unittest discover -s crawler/tests` (Python, dengan dependensi crawler terpasang, misalnya lewat `crawler/.venv`).

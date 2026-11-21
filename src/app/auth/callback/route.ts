@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       aksi: "login_gagal",
       detail: "Data cookie sesi login (sso_tx) rusak saat callback SSO.",
     });
-    return NextResponse.json({ error: "Data sesi login (sso_tx) rusak." }, { status: 400 });
+    return NextResponse.json({ message: "Data sesi login (sso_tx) rusak." }, { status: 400 });
   }
 
   // 1. Cegah CSRF
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       {
-        error: "Cookie sesi login (sso_tx) tidak ditemukan. Pastikan host saat membuka /sso/login sama dengan SSO_REDIRECT_URI.",
+        message: "Cookie sesi login (sso_tx) tidak ditemukan. Pastikan host saat membuka /sso/login sama dengan SSO_REDIRECT_URI.",
       },
       { status: 400 },
     );
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       aksi: "login_gagal",
       detail: "Parameter state callback SSO tidak cocok.",
     });
-    return NextResponse.json({ error: "State tidak cocok." }, { status: 400 });
+    return NextResponse.json({ message: "State tidak cocok." }, { status: 400 });
   }
 
   // 2. Error handling jika role tidak sesuai atau login dibatalkan di SSO
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       aksi: "login_gagal",
       detail: `SSO menolak callback (${ssoCallbackError}): ${errorDescription}`,
     });
-    return NextResponse.json({ error: errorDescription }, { status: 403 });
+    return NextResponse.json({ message: errorDescription }, { status: 403 });
   }
 
   const { ssoUrl, clientId, clientSecret, redirectUri } = getSsoConfig();
@@ -66,13 +66,13 @@ export async function GET(request: NextRequest) {
   try {
     getSessionSecretKey();
   } catch {
-    return NextResponse.json({ error: "Konfigurasi SESSION_SECRET pada server belum diatur." }, { status: 500 });
+    return NextResponse.json({ message: "Konfigurasi SESSION_SECRET pada server belum diatur." }, { status: 500 });
   }
 
   if (!ssoUrl || !isValidHttpUrl(ssoUrl) || !clientId || !clientSecret || !redirectUri) {
     return NextResponse.json(
       {
-        error: "Konfigurasi environment SSO pada server belum lengkap atau tidak valid.",
+        message: "Konfigurasi environment SSO pada server belum lengkap atau tidak valid.",
       },
       { status: 500 },
     );
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       aksi: "login_gagal",
       detail: "Parameter code tidak ditemukan pada callback SSO.",
     });
-    return NextResponse.json({ error: "Parameter code tidak ditemukan pada callback SSO." }, { status: 400 });
+    return NextResponse.json({ message: "Parameter code tidak ditemukan pada callback SSO." }, { status: 400 });
   }
 
   try {
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: "Login SSO gagal saat menukar token.",
+          message: "Login SSO gagal saat menukar token.",
           ssoStatus: res.status,
           ssoError: ssoError ?? null,
           ssoDescription: ssoDescription ?? null,
@@ -205,6 +205,6 @@ export async function GET(request: NextRequest) {
       aksi: "login_gagal",
       detail: `Verifikasi sesi SSO gagal: ${error instanceof Error ? error.message : String(error)}`,
     });
-    return NextResponse.json({ error: "Terjadi kesalahan saat memverifikasi sesi SSO." }, { status: 500 });
+    return NextResponse.json({ message: "Terjadi kesalahan saat memverifikasi sesi SSO." }, { status: 500 });
   }
 }
