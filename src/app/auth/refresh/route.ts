@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/db";
+import { cariDosenIdSesi } from "@/lib/dosen-sesi";
 import {
   decryptRefreshToken,
   encryptRefreshToken,
@@ -63,19 +63,7 @@ export async function POST(request: NextRequest) {
   try {
     const { payload, refreshToken: nextRefreshToken } = result;
 
-    let dosenId: number | null = null;
-    if (
-      payload.role === "Dosen" ||
-      payload.role === "Kaprodi" ||
-      payload.role === "Staff Kaprodi" ||
-      payload.role === "Admin"
-    ) {
-      const dosen = await db.dosen.findUnique({
-        where: { user_id: String(payload.sub) },
-        select: { id: true },
-      });
-      dosenId = dosen?.id ?? null;
-    }
+    const dosenId = await cariDosenIdSesi(String(payload.sub), payload.role);
 
     const expTime = payload.exp ?? Math.floor(Date.now() / 1000) + 900;
     const newSession = await signLocalSession(

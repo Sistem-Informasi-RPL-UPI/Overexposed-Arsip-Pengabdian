@@ -192,7 +192,7 @@ interface VArsipListRow {
   retensi_inaktif_tahun: number;
 }
 
-function escapeLikePattern(value: string): string {
+export function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
@@ -282,7 +282,6 @@ export interface ParsedArsipPayload {
   judul: string;
   kategori_id: number;
   tanggal_arsip: Date;
-  pencipta_unit: string | null;
   link_berkas: string;
   keterangan: string | null;
   retensi_aktif_tahun?: number;
@@ -388,9 +387,7 @@ export function parseArsipPayload(rawBody: unknown): { ok: true; data: ParsedArs
   const linkBerkas = parseLinkBerkas(body.linkBerkas ?? body.link_berkas);
   if (!linkBerkas.ok) return linkBerkas;
 
-  const penciptaUnit = parseOptionalText(body.pencipta_unit ?? body.penciptaUnit, "Pencipta unit");
-  if (!penciptaUnit.ok) return penciptaUnit;
-
+  // pencipta_unit sengaja tidak dibaca dari body: diisi nama akun yang login di route handler.
   const keterangan = parseOptionalText(body.keterangan, "Keterangan");
   if (!keterangan.ok) return keterangan;
 
@@ -418,7 +415,6 @@ export function parseArsipPayload(rawBody: unknown): { ok: true; data: ParsedArs
       judul: judul.value,
       kategori_id: kategoriId.value,
       tanggal_arsip: tanggalArsip.value,
-      pencipta_unit: penciptaUnit.value,
       link_berkas: linkBerkas.value,
       keterangan: keterangan.value,
       ...(aktifParsed.value !== undefined ? { retensi_aktif_tahun: aktifParsed.value } : {}),
@@ -476,12 +472,7 @@ export function parsePatchArsipPayload(rawBody: unknown): { ok: true; data: Patc
     data.link_berkas = res.value;
   }
 
-  if ("pencipta_unit" in body || "penciptaUnit" in body) {
-    const res = parseOptionalText(body.pencipta_unit ?? body.penciptaUnit, "Pencipta unit");
-    if (!res.ok) return res;
-    data.pencipta_unit = res.value;
-  }
-
+  // pencipta_unit tidak bisa diubah: tetap nama pembuat arsip.
   if ("keterangan" in body) {
     const res = parseOptionalText(body.keterangan, "Keterangan");
     if (!res.ok) return res;

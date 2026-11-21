@@ -54,6 +54,20 @@ describe("RBAC rute /api/arsip (lapisan proxy)", () => {
   });
 });
 
+describe("RBAC rute /api/dashboard (lapisan proxy)", () => {
+  it.each([
+    ["Staff Kaprodi", "izin"],
+    ["Admin", "izin"],
+    ["Kaprodi", "izin"],
+    ["Dosen", "izin"],
+    ["Mahasiswa", "dilarang"],
+    ["Umum", "dilarang"],
+    [null, "belum_login"],
+  ])("GET oleh %s: %s", (peran, harapan) => {
+    expect(keputusan("/api/dashboard", "GET", peran)).toBe(harapan);
+  });
+});
+
 describe("RBAC rute /api/arsip/kategori (lapisan proxy)", () => {
   it.each([
     ["Staff Kaprodi", "izin"],

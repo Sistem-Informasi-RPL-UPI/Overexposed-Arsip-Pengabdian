@@ -211,6 +211,18 @@ describe("POST /api/arsip", () => {
     expect(data.tanggal_arsip).toEqual(new Date("2026-03-10T00:00:00Z"));
   });
 
+  it("pencipta_unit diisi nama akun yang login, bukan nilai dari body", async () => {
+    await tambah({ ...BODY_VALID, pencipta_unit: "Unit Palsu" });
+    expect(mocks.db.arsip.create.mock.calls[0][0].data.pencipta_unit).toBe("Pengguna Uji");
+  });
+
+  it("pencipta_unit tetap terisi walau body tidak mengirimnya", async () => {
+    const tanpaPencipta: Record<string, unknown> = { ...BODY_VALID };
+    delete tanpaPencipta.pencipta_unit;
+    await tambah(tanpaPencipta);
+    expect(mocks.db.arsip.create.mock.calls[0][0].data.pencipta_unit).toBe("Pengguna Uji");
+  });
+
   it("memakai retensi yang diisi sendiri, termasuk 0, bukan milik kategori", async () => {
     await tambah({ ...BODY_VALID, retensi_aktif_tahun: 5, retensi_inaktif_tahun: 0 });
     const data = mocks.db.arsip.create.mock.calls[0][0].data;
@@ -294,6 +306,11 @@ describe("PATCH /api/arsip/[id]", () => {
     expect(arg.where).toEqual({ id: 7 });
     expect(arg.data).toEqual({ judul: "Judul Baru", status_validasi: "Pending", catatan_validasi: null });
     expect((await baca(res)).message).toContain("Pending");
+  });
+
+  it("pencipta_unit dari body diabaikan saat edit", async () => {
+    await ubah({ judul: "Judul Baru", pencipta_unit: "Unit Lain" });
+    expect(mocks.db.arsip.update.mock.calls[0][0].data).not.toHaveProperty("pencipta_unit");
   });
 
   it("arsip yang Ditolak pun kembali ke Pending setelah diedit", async () => {

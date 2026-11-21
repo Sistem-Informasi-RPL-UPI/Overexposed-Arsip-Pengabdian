@@ -31,10 +31,16 @@ describe("parseArsipPayload", () => {
     if (!hasil.ok) return;
     expect(hasil.data.nomor_arsip).toBe("ARS-001");
     expect(hasil.data.tanggal_arsip.toISOString()).toBe("2026-03-10T00:00:00.000Z");
-    expect(hasil.data.pencipta_unit).toBeNull();
+    expect(hasil.data).not.toHaveProperty("pencipta_unit");
     expect(hasil.data.keterangan).toBeNull();
     expect(hasil.data).not.toHaveProperty("retensi_aktif_tahun");
     expect(hasil.data).not.toHaveProperty("retensi_inaktif_tahun");
+  });
+
+  it("mengabaikan pencipta_unit dari body (diisi dari sesi di route)", () => {
+    const hasil = parseArsipPayload({ ...BASE, pencipta_unit: "Unit Palsu", penciptaUnit: "Unit Lain" });
+    expect(hasil.ok).toBe(true);
+    expect(hasil.ok && hasil.data).not.toHaveProperty("pencipta_unit");
   });
 
   it("menerima nama field camelCase", () => {
@@ -140,6 +146,14 @@ describe("parsePatchArsipPayload", () => {
     expect(parsePatchArsipPayload({ link_berkas: "ftp://x.com" }).ok).toBe(false);
     expect(parsePatchArsipPayload({ tanggal_arsip: "2026-02-30" }).ok).toBe(false);
     expect(parsePatchArsipPayload({ nomor_arsip: " " }).ok).toBe(false);
+  });
+
+  it("pencipta_unit tidak bisa diubah lewat PATCH", () => {
+    expect(parsePatchArsipPayload({ pencipta_unit: "Unit Lain" }).ok).toBe(false);
+    expect(parsePatchArsipPayload({ judul: "Baru", penciptaUnit: "Unit Lain" })).toEqual({
+      ok: true,
+      data: { judul: "Baru" },
+    });
   });
 
   it("mengosongkan field opsional dengan null", () => {
