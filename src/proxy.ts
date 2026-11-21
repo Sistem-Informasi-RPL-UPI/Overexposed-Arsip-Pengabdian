@@ -111,7 +111,7 @@ export async function proxy(request: NextRequest) {
           : "Anda tidak memiliki izin untuk mengakses resource ini.";
 
       return attachCookies(
-        NextResponse.json({ error: errorMessage }, { status }),
+        NextResponse.json({ message: errorMessage }, { status }),
         refreshedCookies,
         shouldClearStaleCookies
       );

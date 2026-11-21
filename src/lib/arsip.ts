@@ -205,7 +205,7 @@ export async function listArsipFromView(filters: ArsipListFilters) {
 
   if (filters.search) {
     const pattern = `%${escapeLikePattern(filters.search)}%`;
-    conditions.push(Prisma.sql`("judul" ILIKE ${pattern} ESCAPE '\\' OR "nomor_surat" ILIKE ${pattern} ESCAPE '\\')`);
+    conditions.push(Prisma.sql`("judul" ILIKE ${pattern} ESCAPE '\\' OR "nomor_surat" ILIKE ${pattern} ESCAPE '\\' OR "nomor_arsip" ILIKE ${pattern} ESCAPE '\\')`);
   }
 
   if (filters.kategoriId !== undefined) {
