@@ -68,6 +68,25 @@ describe("RBAC rute /api/dashboard (lapisan proxy)", () => {
   });
 });
 
+describe("RBAC rute /api/log-aktivitas (lapisan proxy)", () => {
+  it.each([
+    ["Staff Kaprodi", "izin"],
+    ["Admin", "izin"],
+    ["Kaprodi", "izin"],
+    ["Dosen", "dilarang"],
+    ["Mahasiswa", "dilarang"],
+    ["Umum", "dilarang"],
+    [null, "belum_login"],
+  ])("GET oleh %s: %s", (peran, harapan) => {
+    expect(keputusan("/api/log-aktivitas", "GET", peran)).toBe(harapan);
+  });
+
+  it.each(["POST", "PATCH", "DELETE"])("%s ditolak, bahkan untuk Kaprodi (log hanya dibaca)", (method) => {
+    expect(keputusan("/api/log-aktivitas", method, "Kaprodi")).toBe("dilarang");
+    expect(keputusan("/api/log-aktivitas", method, "Staff Kaprodi")).toBe("dilarang");
+  });
+});
+
 describe("RBAC rute /api/arsip/kategori (lapisan proxy)", () => {
   it.each([
     ["Staff Kaprodi", "izin"],

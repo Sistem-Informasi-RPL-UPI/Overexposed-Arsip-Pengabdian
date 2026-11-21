@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.9. Berdasarkan ERD versi 6.
+Versi: 1.10. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -16,6 +16,7 @@ Versi: 1.9. Berdasarkan ERD versi 6.
 | 1.7   | 2026-11-19 | Pengisian `sinta_id` (5.1 langkah 4) diperjelas: endpoint hanya menambah baris `dosen`, crawl tidak otomatis dan hanya berjalan saat tombol sinkron ditekan. |
 | 1.8   | 2026-11-21 | Modul 4 disesuaikan dengan implementasi: endpoint kategori dan arsip (6.7) berada di `/api/arsip/kategori` dan memakai `PATCH`, pencarian arsip mencakup nomor arsip, edit arsip mengosongkan `catatan_validasi`, retensi kategori minimal 1 tahun. Konvensi respons galat JSON memakai kunci `message`. Log login gagal memakai `null` (fallback UUID nol dihapus). Struktur folder dan status pengerjaan diperbarui. |
 | 1.9   | 2026-11-21 | Dosen boleh melihat Dashboard (bagian 12 nomor 13 ditutup). Endpoint `GET /api/dashboard` ditambahkan (6.3, 6.7). `pencipta_unit` arsip diisi otomatis dari nama akun yang login dan tidak bisa diubah. |
+| 1.10  | 2026-11-21 | Endpoint `GET /api/log-aktivitas` ditambahkan (6.4, 6.7): filter modul, aksi, objek, dan rentang tanggal (batas hari WIB). Endpoint validasi arsip (`GET /api/arsip/validasi`, `PATCH /api/arsip/[id]/validasi`) dicatat di 6.7. Struktur folder dan status pengerjaan diperbarui. |
 
 ---
 
@@ -197,7 +198,8 @@ Dosen boleh melihat Dashboard (diputuskan 2026-11-21, bagian 12 nomor 13).
 - `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (salinan nama, supaya log tetap terbaca bila user dihapus di SSO), `modul` (`4`, `7`, atau `auth`), `aksi` (tambah, ubah, hapus, validasi, sinkron, login, login_gagal), `objek` (arsip, kategori, dosen, atau sso), `detail` (teks yang berisi pengenal, misalnya nomor arsip atau judul, serta alasan gagal login), `created_at`.
 - Tidak ada `objek_id` dan `ip_address`.
 - Yang dicatat: tambah, ubah, hapus, dan validasi arsip; perubahan kategori; sinkron dosen (modul 7); login sukses dan gagal (modul auth).
-- Yang boleh melihat: Staff Kaprodi dan Kaprodi.
+- Yang boleh melihat: Staff Kaprodi dan Kaprodi. Peran lain mendapat 403. Log hanya bisa dibaca lewat API, tidak bisa ditambah, diubah, atau dihapus dari luar.
+- Daftar log (`GET /api/log-aktivitas`) diurutkan dari yang terbaru, 10 per halaman (maksimal 50). Filter: `modul` (`4`, `7`, `auth`), `aksi`, `objek`, serta rentang tanggal `dari` dan `sampai` (format `YYYY-MM-DD`, keduanya inklusif). Batas hari pada filter tanggal memakai WIB, karena `created_at` adalah waktu kejadian. Nilai filter yang tidak dikenal dibalas 400.
 
 ### 6.5 Profil Saya
 
@@ -226,6 +228,9 @@ Hak akses dicek dua lapis: di `src/proxy.ts` (per rute dan method) dan di handle
 | `PATCH /api/arsip/[id]`          | Staff Kaprodi               | Hanya field yang dikirim. Status kembali ke Pending. 409 bila nomor arsip dipakai arsip lain.                 |
 | `DELETE /api/arsip/[id]`         | Staff Kaprodi               | Hanya bila status retensi Dimusnahkan, selain itu 409.                                                        |
 | `GET /api/dashboard`             | Staff Kaprodi, Kaprodi, Dosen | Parameter `search`, `page`, `pageSize` (bawaan 5). Respons `{ totalArsip, aktivitasTerbaru: { items, pagination } }`. |
+| `GET /api/arsip/validasi`        | Kaprodi                     | Daftar untuk halaman Validasi. Parameter `status` (`Pending`, `Diterima`, `Ditolak`), `search`, `kategori`, `tahun`, `page`, `pageSize`. |
+| `PATCH /api/arsip/[id]/validasi` | Kaprodi                     | Body `{ "status_validasi": "Diterima" \| "Ditolak", "catatan_validasi": "..." }`. Catatan wajib saat Ditolak. Arsip yang sudah divalidasi tetap bisa divalidasi ulang. |
+| `GET /api/log-aktivitas`         | Staff Kaprodi, Kaprodi      | Parameter `modul`, `aksi`, `objek`, `dari`, `sampai`, `page`, `pageSize`. Lihat 6.4.                          |
 
 Mahasiswa dan Umum tidak punya akses ke semua rute di atas. Setiap penambahan, perubahan, dan penghapusan tercatat di `log_aktivitas` (`modul = 4`).
 
@@ -349,14 +354,15 @@ sacibiru-modul/
 │  │     ├─ dosen/sinkron/route.ts
 │  │     ├─ dosen/sinkron/status/route.ts
 │  │     ├─ staff-kaprodi/sinkron/route.ts
-│  │     ├─ log-aktivitas/route.ts
+│  │     ├─ log-aktivitas/route.ts    (GET daftar log, Staff Kaprodi dan Kaprodi)
 │  │     ├─ arsip/
 │  │     │  ├─ route.ts               (GET daftar, POST tambah)
 │  │     │  ├─ [id]/route.ts          (GET detail, PATCH ubah, DELETE hapus)
+│  │     │  ├─ [id]/validasi/route.ts (PATCH validasi oleh Kaprodi)
 │  │     │  ├─ kategori/
 │  │     │  │  ├─ route.ts            (GET daftar, POST tambah)
 │  │     │  │  └─ [id]/route.ts       (PATCH ubah, DELETE hapus)
-│  │     │  └─ validasi/...           (belum ada)
+│  │     │  └─ validasi/route.ts      (GET daftar untuk halaman Validasi)
 │  │     └─ tridarma/
 │  │        └─ pengajaran/...
 │  ├─ lib/
@@ -365,6 +371,8 @@ sacibiru-modul/
 │  │  ├─ sso.ts
 │  │  ├─ auth-log.ts              (pintasan catatLog untuk login)
 │  │  ├─ log-aktivitas.ts         (helper catatLog)
+│  │  ├─ log-aktivitas-daftar.ts  (filter dan query daftar log)
+│  │  ├─ dosen-sesi.ts            (cariDosenIdSesi untuk login dan refresh)
 │  │  ├─ retensi.ts               (hitungRetensi: logika murni status retensi)
 │  │  ├─ arsip.ts                 (validasi dan query arsip)
 │  │  ├─ kategori.ts              (validasi dan query kategori)
@@ -385,8 +393,9 @@ sacibiru-modul/
 │  └─ .env.example
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
 │  ├─ helpers/fixtures.ts
-│  ├─ lib/                        (retensi, log-aktivitas, kategori, arsip, dashboard, rbac-arsip)
-│  └─ api/                        (kategori, arsip, dashboard: handler dengan database tiruan)
+│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip)
+│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas: handler dengan database tiruan)
+│  └─ proxy.test.ts               (penyegaran sesi dan dosen_id)
 ├─ vitest.config.ts
 ├─ .env.example
 └─ package.json
@@ -447,4 +456,4 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 6. API Modul 7 (tridarma, lalu pengajaran).
 7. Tinjauan keamanan sisi SSO, lalu tes untuk logika murni (normalisasi nama, hash, status retensi, upsert, aturan 7 hari).
 
-**Status Modul 4 (2026-11-21).** Sudah ada beserta tes: perubahan skema dan `v_arsip`, `hitungRetensi`, helper log aktivitas, API kategori, API arsip, dan dashboard (6.7). Belum ada: validasi arsip oleh Kaprodi, endpoint daftar log aktivitas, dan profil saya. Perintah tes: `npm test` (Vitest) dan `python -m unittest discover -s crawler/tests` (Python, dengan dependensi crawler terpasang, misalnya lewat `crawler/.venv`).
+**Status Modul 4 (2026-11-21).** Sudah ada beserta tes: perubahan skema dan `v_arsip`, `hitungRetensi`, helper log aktivitas, API kategori, API arsip, dashboard, validasi arsip oleh Kaprodi, dan endpoint daftar log aktivitas (6.7). Belum ada: profil saya. Perintah tes: `npm test` (Vitest) dan `python -m unittest discover -s crawler/tests` (Python, dengan dependensi crawler terpasang, misalnya lewat `crawler/.venv`).
