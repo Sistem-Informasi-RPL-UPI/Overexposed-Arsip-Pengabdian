@@ -80,7 +80,33 @@ function formatTanggal(isoDate: string): string {
   return isoDate.slice(0, 10);
 }
 
-export function ArsipTestPanel({ canManage, role, kategoriOptions }: { canManage: boolean; role: string; kategoriOptions: KategoriOption[] }) {
+type StatusValidasiTab = "Pending" | "Diterima" | "Ditolak";
+
+const VALIDASI_TABS: StatusValidasiTab[] = ["Pending", "Diterima", "Ditolak"];
+
+interface ArsipValidasiListResponse {
+  items: ArsipDetail[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  message?: string;
+}
+
+export function ArsipTestPanel({
+  canManage,
+  canValidate,
+  role,
+  kategoriOptions,
+}: {
+  canManage: boolean;
+  canValidate?: boolean;
+  role: string;
+  kategoriOptions: KategoriOption[];
+}) {
+  const isKaprodiValidator = canValidate ?? role === "Kaprodi";
   const defaultKategoriId = kategoriOptions[0] ? String(kategoriOptions[0].id) : "";
   const buildInitialForm = (): FormState => ({
     nomorArsip: "",
@@ -120,6 +146,20 @@ export function ArsipTestPanel({ canManage, role, kategoriOptions }: { canManage
   const [selectedDetail, setSelectedDetail] = useState<ArsipDetail | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<ApiFeedback | null>(null);
+
+  const [validasiTab, setValidasiTab] = useState<StatusValidasiTab>("Pending");
+  const [validasiPage, setValidasiPage] = useState(1);
+  const [validasiItems, setValidasiItems] = useState<ArsipDetail[]>([]);
+  const [validasiTotalPages, setValidasiTotalPages] = useState(1);
+  const [validasiTotal, setValidasiTotal] = useState(0);
+  const [validasiReloadTick, setValidasiReloadTick] = useState(0);
+  const currentValidasiQuery = isKaprodiValidator ? `${validasiTab}|${validasiPage}|${validasiReloadTick}` : "";
+  const [settledValidasiQuery, setSettledValidasiQuery] = useState("");
+  const isValidasiLoading = isKaprodiValidator && settledValidasiQuery !== currentValidasiQuery;
+  const [validasiLoadError, setValidasiLoadError] = useState<string | null>(null);
+  const [catatanValidasiInput, setCatatanValidasiInput] = useState("");
+  const [validatingId, setValidatingId] = useState<number | null>(null);
+  const [validasiFeedback, setValidasiFeedback] = useState<ApiFeedback | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +202,106 @@ export function ArsipTestPanel({ canManage, role, kategoriOptions }: { canManage
 
   function reloadArsip() {
     setReloadTick((t) => t + 1);
+  }
+
+  function reloadValidasi() {
+    setValidasiReloadTick((t) => t + 1);
+  }
+
+  useEffect(() => {
+    if (!isKaprodiValidator) return;
+
+    let cancelled = false;
+    const qs = new URLSearchParams({
+      status: validasiTab,
+      page: String(validasiPage),
+    });
+
+    fetch(`/api/arsip/validasi?${qs.toString()}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as ArsipValidasiListResponse | null;
+        if (cancelled) return;
+
+        if (!res.ok || !data || !Array.isArray(data.items)) {
+          setValidasiLoadError(`HTTP ${res.status}: ${parseApiMessage(data, "Gagal memuat daftar validasi arsip.")}`);
+          setValidasiItems([]);
+          return;
+        }
+
+        setValidasiLoadError(null);
+        setValidasiItems(data.items);
+        setValidasiTotalPages(data.pagination?.totalPages ?? 1);
+        setValidasiTotal(data.pagination?.total ?? data.items.length);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setValidasiLoadError("Gagal terhubung ke endpoint GET /api/arsip/validasi.");
+        setValidasiItems([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSettledValidasiQuery(currentValidasiQuery);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isKaprodiValidator, validasiTab, validasiPage, currentValidasiQuery]);
+
+  async function handleValidasiSubmit(id: number, keputusan: "Diterima" | "Ditolak") {
+    if (!isKaprodiValidator || validatingId !== null) return;
+
+    setValidatingId(id);
+    setValidasiFeedback(null);
+
+    try {
+      const res = await fetch(`/api/arsip/${id}/validasi`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status_validasi: keputusan,
+          catatan_validasi: catatanValidasiInput,
+        }),
+      });
+
+      const payload = (await res.json().catch(() => null)) as {
+        data?: ArsipDetail;
+        message?: string;
+        error?: string;
+      } | null;
+
+      if (!res.ok) {
+        setValidasiFeedback({
+          type: "error",
+          status: res.status,
+          message: parseApiMessage(payload, "Gagal memvalidasi arsip."),
+        });
+        return;
+      }
+
+      setValidasiFeedback({
+        type: "success",
+        status: res.status,
+        message: parseApiMessage(payload, `Arsip berhasil divalidasi (${keputusan}).`),
+      });
+
+      if (payload?.data && selectedDetail?.id === id) {
+        setSelectedDetail(payload.data);
+      }
+
+      setCatatanValidasiInput("");
+      reloadValidasi();
+      reloadArsip();
+    } catch {
+      setValidasiFeedback({
+        type: "error",
+        status: null,
+        message: "Terjadi kesalahan jaringan saat mengirim validasi arsip.",
+      });
+    } finally {
+      setValidatingId(null);
+    }
   }
 
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
@@ -862,6 +1002,249 @@ export function ArsipTestPanel({ canManage, role, kategoriOptions }: { canManage
           </div>
         </div>
       </div>
+
+      {isKaprodiValidator && (
+        <div className="flex flex-col gap-4 border-t border-[var(--color-border-default)] pt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h3 id="arsip-validasi-heading" className="font-[family-name:var(--font-lexend)] text-[17px] font-bold text-[var(--color-text-primary)]">
+                Uji API Validasi Arsip (Kaprodi)
+              </h3>
+              <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                Tab GET /api/arsip/validasi?status=Pending|Diterima|Ditolak dan aksi PATCH /api/arsip/[id]/validasi.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={reloadValidasi}
+              disabled={isValidasiLoading}
+              className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-border-strong)] bg-white px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-tint-neutral)] active:bg-[var(--color-border-default)] disabled:opacity-55"
+            >
+              {isValidasiLoading ? "Memuat..." : "Muat Ulang Validasi"}
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-[14px] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] p-4">
+            <div role="tablist" aria-label="Tab status validasi arsip" className="flex flex-wrap gap-2">
+              {VALIDASI_TABS.map((tab) => {
+                const isActive = validasiTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setValidasiTab(tab);
+                      setValidasiPage(1);
+                      setValidasiFeedback(null);
+                    }}
+                    className={`inline-flex min-h-[44px] items-center justify-center rounded-[10px] px-4 py-2 text-[13px] font-semibold transition-colors ${
+                      isActive
+                        ? "bg-[var(--color-primary-strong)] text-white"
+                        : "border border-[var(--color-border-strong)] bg-white text-[var(--color-text-primary)] hover:bg-[var(--color-tint-neutral)]"
+                    }`}
+                  >
+                    Status: {tab}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="arsip-catatan-validasi" className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                Catatan Validasi (wajib diisi saat Ditolak, opsional saat Diterima)
+              </label>
+              <input
+                id="arsip-catatan-validasi"
+                type="text"
+                value={catatanValidasiInput}
+                onChange={(e) => setCatatanValidasiInput(e.target.value)}
+                placeholder="Tulis alasan penolakan atau catatan persetujuan sebelum menekan tombol Terima / Tolak"
+                disabled={validatingId !== null}
+                className={inputClassName}
+              />
+            </div>
+
+            {validasiFeedback && (
+              <div
+                role={validasiFeedback.type === "error" ? "alert" : "status"}
+                className={`rounded-[10px] px-3.5 py-2.5 text-[13px] font-medium ${
+                  validasiFeedback.type === "success"
+                    ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
+                    : "bg-[var(--color-danger-bg)] text-[var(--color-danger-solid)]"
+                }`}
+              >
+                {validasiFeedback.status !== null ? `HTTP ${validasiFeedback.status}: ` : ""}
+                {validasiFeedback.message}
+              </div>
+            )}
+          </div>
+
+          {isValidasiLoading ? (
+            <p role="status" className="rounded-[12px] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] px-4 py-6 text-center text-[13px] text-[var(--color-text-secondary)]">
+              Memuat daftar validasi arsip ({validasiTab}) dari /api/arsip/validasi...
+            </p>
+          ) : validasiLoadError ? (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] bg-[var(--color-danger-bg)] px-4 py-3 text-[13px] font-medium text-[var(--color-danger-solid)]">
+              <span>{validasiLoadError}</span>
+              <button
+                type="button"
+                onClick={reloadValidasi}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-danger-solid)] bg-white px-3.5 py-1.5 text-[13px] font-semibold text-[var(--color-danger-solid)] transition-colors hover:bg-[var(--color-danger-bg)]"
+              >
+                Coba Lagi
+              </button>
+            </div>
+          ) : validasiItems.length === 0 ? (
+            <p role="status" className="rounded-[12px] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] px-4 py-6 text-center text-[13px] text-[var(--color-text-secondary)]">
+              Belum ada arsip pada tab status {validasiTab}. Pilih tab status lain atau minta Staff Kaprodi menambahkan arsip.
+            </p>
+          ) : (
+            <>
+              <ul className="flex flex-col gap-2.5 sm:hidden">
+                {validasiItems.map((item) => (
+                  <li key={item.id} className="flex flex-col gap-1.5 rounded-[12px] border border-[var(--color-border-default)] bg-white p-3.5 text-[13px]">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-[var(--color-text-primary)]">{item.nomor_arsip}</span>
+                      <span
+                        className={`shrink-0 rounded-[6px] px-2 py-0.5 text-[12px] font-semibold ${
+                          item.status_validasi === "Diterima"
+                            ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
+                            : item.status_validasi === "Ditolak"
+                              ? "bg-[var(--color-danger-bg)] text-[var(--color-danger-solid)]"
+                              : "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]"
+                        }`}
+                      >
+                        {item.status_validasi}
+                      </span>
+                    </div>
+                    <p className="font-semibold text-[var(--color-text-primary)]">{item.judul}</p>
+                    <p className="text-[var(--color-text-secondary)]">
+                      No. Surat: {item.nomor_surat} | Tgl: {formatTanggal(item.tanggal_arsip)}
+                    </p>
+                    <p className="text-[var(--color-text-secondary)]">
+                      Kategori: {item.kategori.kode} - {item.kategori.nama}
+                    </p>
+                    <p className="text-[var(--color-text-secondary)]">
+                      Catatan: {item.catatan_validasi || "-"}
+                    </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleValidasiSubmit(item.id, "Diterima")}
+                        disabled={validatingId !== null}
+                        className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[10px] bg-[var(--color-primary-strong)] px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--color-primary)] active:bg-[var(--color-text-primary)] disabled:opacity-55"
+                      >
+                        {validatingId === item.id ? "Memproses..." : "Terima"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleValidasiSubmit(item.id, "Ditolak")}
+                        disabled={validatingId !== null}
+                        className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-[10px] border border-[var(--color-danger-solid)] bg-white px-3 py-2 text-[13px] font-semibold text-[var(--color-danger-solid)] transition-colors hover:bg-[var(--color-danger-bg)] active:bg-[var(--color-danger-bg)] disabled:opacity-55"
+                      >
+                        {validatingId === item.id ? "Memproses..." : "Tolak"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="hidden overflow-x-auto rounded-[12px] border border-[var(--color-border-default)] sm:block">
+                <table className="w-full border-collapse text-left text-[13px]">
+                  <thead className="bg-[var(--color-bg-page)] text-[var(--color-text-primary)]">
+                    <tr className="border-b border-[var(--color-border-default)]">
+                      <th className="px-3.5 py-2.5 font-semibold">No. Arsip</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Judul &amp; Surat</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Kategori</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Status &amp; Catatan</th>
+                      <th className="px-3.5 py-2.5 font-semibold">Aksi Validasi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border-default)] bg-white">
+                    {validasiItems.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3.5 py-2.5 whitespace-nowrap font-bold text-[var(--color-text-primary)]">
+                          {item.nomor_arsip}
+                          <div className="mt-0.5 text-[12px] font-normal text-[var(--color-text-secondary)]">{formatTanggal(item.tanggal_arsip)}</div>
+                        </td>
+                        <td className="px-3.5 py-2.5 font-medium text-[var(--color-text-primary)]">
+                          {item.judul}
+                          <div className="mt-0.5 text-[12px] font-normal text-[var(--color-text-secondary)]">Surat: {item.nomor_surat}</div>
+                        </td>
+                        <td className="px-3.5 py-2.5 text-[var(--color-text-secondary)]">
+                          <span className="font-semibold text-[var(--color-text-primary)]">{item.kategori.kode}</span> - {item.kategori.nama}
+                        </td>
+                        <td className="px-3.5 py-2.5 text-[var(--color-text-secondary)]">
+                          <span
+                            className={`inline-block rounded-[6px] px-2 py-0.5 text-[12px] font-semibold ${
+                              item.status_validasi === "Diterima"
+                                ? "bg-[var(--color-success-bg)] text-[var(--color-success-text)]"
+                                : item.status_validasi === "Ditolak"
+                                  ? "bg-[var(--color-danger-bg)] text-[var(--color-danger-solid)]"
+                                  : "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]"
+                            }`}
+                          >
+                            {item.status_validasi}
+                          </span>
+                          <div className="mt-1 text-[12px] text-[var(--color-text-secondary)]">
+                            Catatan: {item.catatan_validasi || "-"}
+                          </div>
+                        </td>
+                        <td className="px-3.5 py-2">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleValidasiSubmit(item.id, "Diterima")}
+                              disabled={validatingId !== null}
+                              className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] bg-[var(--color-primary-strong)] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--color-primary)] active:bg-[var(--color-text-primary)] disabled:opacity-55"
+                            >
+                              {validatingId === item.id ? "Memproses..." : "Terima"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleValidasiSubmit(item.id, "Ditolak")}
+                              disabled={validatingId !== null}
+                              className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-danger-solid)] bg-white px-3 py-1.5 text-[13px] font-semibold text-[var(--color-danger-solid)] transition-colors hover:bg-[var(--color-danger-bg)] active:bg-[var(--color-danger-bg)] disabled:opacity-55"
+                            >
+                              {validatingId === item.id ? "Memproses..." : "Tolak"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-[13px] text-[var(--color-text-secondary)]">
+            <span>
+              Halaman {validasiPage} dari {validasiTotalPages} (Total: {validasiTotal} arsip {validasiTab})
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isValidasiLoading || validasiPage <= 1}
+                onClick={() => setValidasiPage((p) => Math.max(1, p - 1))}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-border-strong)] bg-white px-3.5 py-2 font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-tint-neutral)] active:bg-[var(--color-border-default)] disabled:opacity-55"
+              >
+                Sebelumnya
+              </button>
+              <button
+                type="button"
+                disabled={isValidasiLoading || validasiPage >= validasiTotalPages}
+                onClick={() => setValidasiPage((p) => Math.min(validasiTotalPages, p + 1))}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-border-strong)] bg-white px-3.5 py-2 font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-tint-neutral)] active:bg-[var(--color-border-default)] disabled:opacity-55"
+              >
+                Berikutnya
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

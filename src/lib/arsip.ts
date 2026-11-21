@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, type StatusValidasi } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { KATEGORI_INT_MAX, KATEGORI_SMALLINT_MAX, parseKategoriIdParam, parseKategoriJsonBody, parseKategoriSmallInt } from "@/lib/kategori";
 import { getArsipPermissions } from "@/lib/rbac";
@@ -38,7 +38,7 @@ export const ARSIP_DETAIL_SELECT = {
 
 type ArsipAuthResult = { ok: true; session: LocalSessionPayload } | { ok: false; response: NextResponse };
 
-async function requireArsipAccess(permissionKey: "canViewArsip" | "canManageArsip", forbiddenMessage: string): Promise<ArsipAuthResult> {
+async function requireArsipAccess(permissionKey: "canViewArsip" | "canManageArsip" | "canValidate", forbiddenMessage: string): Promise<ArsipAuthResult> {
   const session = await getSession();
   if (!session) {
     return {
@@ -64,6 +64,10 @@ export function requireArsipViewer(): Promise<ArsipAuthResult> {
 
 export function requireArsipManager(): Promise<ArsipAuthResult> {
   return requireArsipAccess("canManageArsip", "Anda tidak memiliki izin untuk mengelola arsip.");
+}
+
+export function requireArsipValidator(): Promise<ArsipAuthResult> {
+  return requireArsipAccess("canValidate", "Anda tidak memiliki izin untuk memvalidasi arsip.");
 }
 
 export function parseArsipIdParam(rawId: string): number | null {
@@ -588,5 +592,100 @@ export function canDeleteArsip(
   return {
     allowed: retensi.status === "Dimusnahkan",
     retensi,
+  };
+}
+
+export type KeputusanValidasiArsip = Extract<StatusValidasi, "Diterima" | "Ditolak">;
+
+export interface ParsedValidasiArsipPayload {
+  status_validasi: KeputusanValidasiArsip;
+  catatan_validasi: string | null;
+}
+
+export interface ArsipValidasiListFilters extends ArsipListFilters {
+  status?: StatusValidasi;
+}
+
+function normalizeStatusValidasi(raw: string): StatusValidasi | null {
+  const lower = raw.trim().toLowerCase();
+  if (lower === "pending") return "Pending";
+  if (lower === "diterima") return "Diterima";
+  if (lower === "ditolak") return "Ditolak";
+  return null;
+}
+
+export function parseValidasiArsipPayload(rawBody: unknown): { ok: true; data: ParsedValidasiArsipPayload } | { ok: false; message: string } {
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return { ok: false, message: "Body request tidak valid." };
+  }
+
+  const body = rawBody as Record<string, unknown>;
+  const rawStatus = body.status_validasi ?? body.statusValidasi ?? body.status;
+  const normalizedStatus = typeof rawStatus === "string" ? normalizeStatusValidasi(rawStatus) : null;
+
+  if (normalizedStatus !== "Diterima" && normalizedStatus !== "Ditolak") {
+    return {
+      ok: false,
+      message: "Status validasi harus diisi dengan Diterima atau Ditolak.",
+    };
+  }
+
+  const rawCatatan = body.catatan_validasi ?? body.catatanValidasi ?? body.catatan;
+  const catatanParsed = parseOptionalText(rawCatatan, "Catatan validasi");
+  if (!catatanParsed.ok) return catatanParsed;
+
+  if (normalizedStatus === "Ditolak" && !catatanParsed.value) {
+    return {
+      ok: false,
+      message: "Catatan validasi wajib diisi saat arsip ditolak.",
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      status_validasi: normalizedStatus,
+      catatan_validasi: catatanParsed.value,
+    },
+  };
+}
+
+export function parseArsipValidasiFilters(
+  params: URLSearchParams,
+): { ok: true; filters: ArsipValidasiListFilters; where: Prisma.ArsipWhereInput } | { ok: false; message: string } {
+  const baseFiltersResult = parseArsipListFilters(params);
+  if (!baseFiltersResult.ok) return baseFiltersResult;
+
+  const baseWhereResult = buildArsipWhere(params);
+  if (!baseWhereResult.ok) return baseWhereResult;
+
+  const rawStatus = params.get("status") ?? params.get("status_validasi") ?? params.get("statusValidasi");
+  let status: StatusValidasi | undefined;
+
+  if (rawStatus !== null && rawStatus.trim() !== "") {
+    const normalized = normalizeStatusValidasi(rawStatus);
+    if (!normalized) {
+      return {
+        ok: false,
+        message: "Parameter status harus berupa Pending, Diterima, atau Ditolak.",
+      };
+    }
+    status = normalized;
+  }
+
+  const where: Prisma.ArsipWhereInput =
+    status !== undefined
+      ? Object.keys(baseWhereResult.where).length > 0
+        ? { AND: [baseWhereResult.where, { status_validasi: status }] }
+        : { status_validasi: status }
+      : baseWhereResult.where;
+
+  return {
+    ok: true,
+    filters: {
+      ...baseFiltersResult.filters,
+      status,
+    },
+    where,
   };
 }

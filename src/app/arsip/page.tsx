@@ -67,6 +67,7 @@ async function ArsipContent() {
 
       <ArsipTestPanel
         canManage={perms.canManageArsip}
+        canValidate={perms.canValidate}
         role={perms.role}
         kategoriOptions={kategoriOptions}
       />
