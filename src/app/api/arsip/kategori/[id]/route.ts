@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import {
-  isKategoriKodeTaken,
-  KATEGORI_PUBLIC_SELECT,
-  parseKategoriIdParam,
-  parseKategoriJsonBody,
-  parsePatchKategoriPayload,
-  requireKategoriManager,
-} from "@/lib/kategori";
+import { isKategoriKodeTaken, KATEGORI_PUBLIC_SELECT, parseKategoriIdParam, parseKategoriJsonBody, parsePatchKategoriPayload, requireKategoriManager } from "@/lib/kategori";
 import { catatLog } from "@/lib/log-aktivitas";
 
-export async function PATCH(
-  request: NextRequest,
-  context: RouteContext<"/api/arsip/kategori/[id]">,
-) {
+export async function PATCH(request: NextRequest, context: RouteContext<"/api/arsip/kategori/[id]">) {
   const auth = await requireKategoriManager();
   if (!auth.ok) return auth.response;
 
@@ -71,15 +61,12 @@ export async function PATCH(
         return NextResponse.json({ message: "Kategori tidak ditemukan." }, { status: 404 });
       }
     }
-    console.error("PATCH /api/arsip/kategori/[id]:", error);
+    console.error("PATCH Kategori:", error);
     return NextResponse.json({ message: "Gagal memperbarui kategori." }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  context: RouteContext<"/api/arsip/kategori/[id]">,
-) {
+export async function DELETE(_request: NextRequest, context: RouteContext<"/api/arsip/kategori/[id]">) {
   const auth = await requireKategoriManager();
   if (!auth.ok) return auth.response;
 
@@ -105,10 +92,7 @@ export async function DELETE(
     }
 
     if (existing._count.arsip > 0) {
-      return NextResponse.json(
-        { message: "Kategori tidak dapat dihapus karena masih digunakan oleh arsip." },
-        { status: 409 },
-      );
+      return NextResponse.json({ message: "Kategori tidak dapat dihapus karena masih digunakan oleh arsip." }, { status: 409 });
     }
 
     await db.kategori.delete({ where: { id } });
@@ -128,16 +112,13 @@ export async function DELETE(
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2003") {
-        return NextResponse.json(
-          { message: "Kategori tidak dapat dihapus karena masih digunakan oleh arsip." },
-          { status: 409 },
-        );
+        return NextResponse.json({ message: "Kategori tidak dapat dihapus karena masih digunakan oleh arsip." }, { status: 409 });
       }
       if (error.code === "P2025") {
         return NextResponse.json({ message: "Kategori tidak ditemukan." }, { status: 404 });
       }
     }
-    console.error("DELETE /api/arsip/kategori/[id]:", error);
+    console.error("DELETE Kategori:", error);
     return NextResponse.json({ message: "Gagal menghapus kategori." }, { status: 500 });
   }
 }

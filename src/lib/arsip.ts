@@ -305,6 +305,28 @@ function parseOptionalText(raw: unknown, label: string): { ok: true; value: stri
   return { ok: true, value: trimmed || null };
 }
 
+function parseLinkBerkas(raw: unknown): { ok: true; value: string } | { ok: false; message: string } {
+  const trimmed = typeof raw === "string" ? raw.trim() : "";
+  if (!trimmed) {
+    return { ok: false, message: "Link berkas harus diisi." };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(trimmed);
+  } catch {
+    return { ok: false, message: "Link berkas harus berupa URL yang valid (contoh: https://...)." };
+  }
+
+  const isHttp = parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+  const hasValidHost = parsedUrl.hostname === "localhost" || parsedUrl.hostname.includes(".");
+  if (!isHttp || !hasValidHost) {
+    return { ok: false, message: "Link berkas harus berupa URL http:// atau https:// yang valid." };
+  }
+
+  return { ok: true, value: trimmed };
+}
+
 function parseRequiredPositiveId(raw: unknown, label: string): { ok: true; value: number } | { ok: false; message: string } {
   if (typeof raw === "number") {
     if (!Number.isInteger(raw) || raw < 1 || raw > KATEGORI_INT_MAX) {
@@ -363,7 +385,7 @@ export function parseArsipPayload(rawBody: unknown): { ok: true; data: ParsedArs
   const tanggalArsip = parseTanggalArsip(body.tanggalArsip ?? body.tanggal_arsip);
   if (!tanggalArsip.ok) return tanggalArsip;
 
-  const linkBerkas = parseRequiredText(body.linkBerkas ?? body.link_berkas, "Link berkas");
+  const linkBerkas = parseLinkBerkas(body.linkBerkas ?? body.link_berkas);
   if (!linkBerkas.ok) return linkBerkas;
 
   const penciptaUnit = parseOptionalText(body.pencipta_unit ?? body.penciptaUnit, "Pencipta unit");
@@ -403,6 +425,99 @@ export function parseArsipPayload(rawBody: unknown): { ok: true; data: ParsedArs
       ...(inaktifParsed.value !== undefined ? { retensi_inaktif_tahun: inaktifParsed.value } : {}),
     },
   };
+}
+
+export type PatchArsipData = Partial<Omit<ParsedArsipPayload, "retensi_aktif_tahun" | "retensi_inaktif_tahun">> & {
+  retensi_aktif_tahun?: number;
+  retensi_inaktif_tahun?: number;
+};
+
+export function parsePatchArsipPayload(rawBody: unknown): { ok: true; data: PatchArsipData } | { ok: false; message: string } {
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return { ok: false, message: "Body request tidak valid." };
+  }
+
+  const body = rawBody as Record<string, unknown>;
+  const data: PatchArsipData = {};
+
+  if ("nomorArsip" in body || "nomor_arsip" in body) {
+    const res = parseRequiredText(body.nomorArsip ?? body.nomor_arsip, "Nomor arsip");
+    if (!res.ok) return res;
+    data.nomor_arsip = res.value;
+  }
+
+  if ("nomorSurat" in body || "nomor_surat" in body) {
+    const res = parseRequiredText(body.nomorSurat ?? body.nomor_surat, "Nomor surat");
+    if (!res.ok) return res;
+    data.nomor_surat = res.value;
+  }
+
+  if ("judul" in body) {
+    const res = parseRequiredText(body.judul, "Judul arsip");
+    if (!res.ok) return res;
+    data.judul = res.value;
+  }
+
+  if ("kategoriId" in body || "kategori_id" in body) {
+    const res = parseRequiredPositiveId(body.kategoriId ?? body.kategori_id, "Kategori");
+    if (!res.ok) return res;
+    data.kategori_id = res.value;
+  }
+
+  if ("tanggalArsip" in body || "tanggal_arsip" in body) {
+    const res = parseTanggalArsip(body.tanggalArsip ?? body.tanggal_arsip);
+    if (!res.ok) return res;
+    data.tanggal_arsip = res.value;
+  }
+
+  if ("linkBerkas" in body || "link_berkas" in body) {
+    const res = parseLinkBerkas(body.linkBerkas ?? body.link_berkas);
+    if (!res.ok) return res;
+    data.link_berkas = res.value;
+  }
+
+  if ("pencipta_unit" in body || "penciptaUnit" in body) {
+    const res = parseOptionalText(body.pencipta_unit ?? body.penciptaUnit, "Pencipta unit");
+    if (!res.ok) return res;
+    data.pencipta_unit = res.value;
+  }
+
+  if ("keterangan" in body) {
+    const res = parseOptionalText(body.keterangan, "Keterangan");
+    if (!res.ok) return res;
+    data.keterangan = res.value;
+  }
+
+  if ("retensiAktifTahun" in body || "retensi_aktif_tahun" in body) {
+    const parsed = parseKategoriSmallInt(body.retensiAktifTahun ?? body.retensi_aktif_tahun);
+    if (!parsed.ok || parsed.value === undefined) {
+      return {
+        ok: false,
+        message: `Retensi aktif (tahun) wajib diisi bilangan bulat 0-${KATEGORI_SMALLINT_MAX}.`,
+      };
+    }
+    data.retensi_aktif_tahun = parsed.value;
+  }
+
+  if ("retensiInaktifTahun" in body || "retensi_inaktif_tahun" in body) {
+    const parsed = parseKategoriSmallInt(body.retensiInaktifTahun ?? body.retensi_inaktif_tahun);
+    if (!parsed.ok || parsed.value === undefined) {
+      return {
+        ok: false,
+        message: `Retensi inaktif (tahun) wajib diisi bilangan bulat 0-${KATEGORI_SMALLINT_MAX}.`,
+      };
+    }
+    data.retensi_inaktif_tahun = parsed.value;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return {
+      ok: false,
+      message: "Minimal satu field arsip harus diisi untuk diperbarui.",
+    };
+  }
+
+  return { ok: true, data };
 }
 
 export async function findKategoriForArsip(kategoriId: number) {

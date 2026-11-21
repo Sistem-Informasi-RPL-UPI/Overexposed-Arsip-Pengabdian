@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import {
-  buildKategoriWhere,
-  isKategoriKodeTaken,
-  KATEGORI_LIST_SELECT,
-  KATEGORI_PUBLIC_SELECT,
-  parseCreateKategoriPayload,
-  parseKategoriJsonBody,
-  requireKategoriManager,
-  requireKategoriViewer,
-} from "@/lib/kategori";
+import { buildKategoriWhere, isKategoriKodeTaken, KATEGORI_LIST_SELECT, KATEGORI_PUBLIC_SELECT, parseCreateKategoriPayload, parseKategoriJsonBody, requireKategoriManager, requireKategoriViewer } from "@/lib/kategori";
 import { catatLog } from "@/lib/log-aktivitas";
 
 const KATEGORI_PAGE_SIZE = 6;
@@ -57,7 +48,7 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    console.error("GET /api/arsip/kategori:", error);
+    console.error("GET Kategori:", error);
     return NextResponse.json({ message: "Gagal mengambil kategori." }, { status: 500 });
   }
 }
@@ -93,15 +84,12 @@ export async function POST(request: NextRequest) {
       detail: `${kategori.kode} - ${kategori.nama}`,
     });
 
-    return NextResponse.json(
-      { message: "Kategori berhasil ditambahkan.", data: kategori },
-      { status: 201 },
-    );
+    return NextResponse.json({ message: "Kategori berhasil ditambahkan.", data: kategori }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return NextResponse.json({ message: "Kode kategori sudah dipakai." }, { status: 409 });
     }
-    console.error("POST /api/arsip/kategori:", error);
+    console.error("POST Kategori:", error);
     return NextResponse.json({ message: "Gagal menambah kategori." }, { status: 500 });
   }
 }

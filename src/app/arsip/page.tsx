@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { ArsipTestPanel } from "@/components/ArsipTestPanel";
 import { KategoriTestPanel } from "@/components/KategoriTestPanel";
+import { db } from "@/lib/db";
 import { getArsipPermissions } from "@/lib/rbac";
 import { getSession } from "@/lib/session";
 
@@ -33,6 +35,17 @@ async function ArsipContent() {
     redirect("/akses-ditolak");
   }
 
+  const kategoriOptions = await db.kategori.findMany({
+    orderBy: { kode: "asc" },
+    select: {
+      id: true,
+      kode: true,
+      nama: true,
+      retensi_aktif_tahun: true,
+      retensi_inaktif_tahun: true,
+    },
+  });
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-[12px] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] p-4">
@@ -51,6 +64,12 @@ async function ArsipContent() {
           <PermissionItem label="ACC / Persetujuan Arsip" allowed={perms.canAcc} />
         </ul>
       </div>
+
+      <ArsipTestPanel
+        canManage={perms.canManageArsip}
+        role={perms.role}
+        kategoriOptions={kategoriOptions}
+      />
 
       {perms.canViewKategori ? (
         <KategoriTestPanel canManage={perms.canManageKategori} />
