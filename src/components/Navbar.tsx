@@ -25,11 +25,15 @@ import type { getArsipPermissions } from "@/lib/rbac";
 
 type Permissions = ReturnType<typeof getArsipPermissions>;
 
+type BoolPermissionKey = {
+  [K in keyof Permissions]: Permissions[K] extends boolean ? K : never;
+}[keyof Permissions];
+
 type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
-  izin?: keyof Permissions; // kosong = semua user boleh lihat
+  izin?: BoolPermissionKey; // kosong = semua user yang login boleh lihat
 };
 
 type NavGroup = {
@@ -47,34 +51,19 @@ const groups: NavGroup[] = [
   {
     title: "Menu Arsip",
     items: [
-      { label: "Dashboard", href: "/arsip/dashboard", icon: LayoutDashboard },
-      { label: "Daftar Arsip", href: "/arsip/daftar", icon: Inbox },
-      // Tambahkan izin untuk menu yang ingin disembunyikan dari Kaprodi, mis.:
-      // { label: "Kategori", href: "/arsip/kategori", icon: FolderUp, izin: "canViewKategori" },
-      { label: "Kategori", href: "/arsip/kategori", icon: FolderUp },
-      {
-        label: "Log",
-        href: "/arsip/log",
-        icon: ScrollText,
-        izin: "canViewLogAktivitas",
-      },
+      { label: "Dashboard", href: "/arsip/dashboard", icon: LayoutDashboard, izin: "canViewArsip" },
+      { label: "Daftar Arsip", href: "/arsip/daftar", icon: Inbox, izin: "canViewArsip" },
+      { label: "Kategori", href: "/arsip/kategori", icon: FolderUp, izin: "canViewKategori" },
+      { label: "Log", href: "/arsip/log", icon: ScrollText, izin: "canViewLogAktivitas" },
     ],
   },
   {
     title: "Menu Tridharma",
     items: [
-      {
-        label: "Dashboard",
-        href: "/tridharma/dashboard",
-        icon: LayoutDashboard,
-      },
+      { label: "Dashboard", href: "/tridharma/dashboard", icon: LayoutDashboard },
       { label: "Publikasi", href: "/tridharma/publikasi", icon: FileText },
       { label: "Penelitian", href: "/tridharma/penelitian", icon: Microscope },
-      {
-        label: "Pengabdian",
-        href: "/tridharma/pengabdian",
-        icon: HeartHandshake,
-      },
+      { label: "Pengabdian", href: "/tridharma/pengabdian", icon: HeartHandshake },
       { label: "HKI", href: "/tridharma/hki", icon: ClipboardCheck },
       { label: "Buku", href: "/tridharma/buku", icon: BookOpen },
     ],

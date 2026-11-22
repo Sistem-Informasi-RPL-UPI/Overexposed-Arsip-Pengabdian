@@ -227,7 +227,7 @@ export function LogAktivitasPage({ className }: { className?: string }) {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Fetch langsung ke API setiap filter/halaman berubah
+  // 1) Daftar log (tabel + kartu Total dari pagination.total)
   React.useEffect(() => {
     const controller = new AbortController();
 
@@ -263,16 +263,10 @@ export function LogAktivitasPage({ className }: { className?: string }) {
         const rawItems: any[] = data?.items ?? [];
         setItems(rawItems.map(mapItem));
         setTotal(data?.pagination?.total ?? rawItems.length);
-        setStats({
-          tambah: data?.stats?.tambah ?? 0,
-          edit: data?.stats?.edit ?? 0,
-          hapus: data?.stats?.hapus ?? 0,
-        });
       } catch (err) {
         if (controller.signal.aborted) return;
         setItems([]);
         setTotal(0);
-        setStats(ZERO_STATS);
         setError(err instanceof Error ? err.message : "Terjadi kesalahan.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -283,11 +277,44 @@ export function LogAktivitasPage({ className }: { className?: string }) {
     return () => controller.abort();
   }, [q, aksi, rentang, page]);
 
+  // 2) Kartu Tambah / Edit / Hapus: total dari filter aksi masing-masing.
+  //    Mengikuti rentang waktu dan pencarian, tidak mengikuti filter aksi dan halaman.
+  React.useEffect(() => {
+    const controller = new AbortController();
+
+    async function hitung(aksiBackend: string): Promise<number> {
+      const params = new URLSearchParams({
+        page: "1",
+        pageSize: "1", // cukup 1 baris, yang dibutuhkan hanya pagination.total
+        aksi: aksiBackend,
+      });
+      const dari = dariRentang(rentang);
+      if (dari) params.set("dari", dari);
+      if (q) params.set("q", q);
+
+      const res = await fetch(`${LOG_ENDPOINT}?${params}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      const data: any = await res.json().catch(() => null);
+      return res.ok ? (data?.pagination?.total ?? 0) : 0;
+    }
+
+    Promise.all([hitung("tambah"), hitung("ubah"), hitung("hapus")])
+      .then(([tambah, edit, hapus]) => {
+        if (!controller.signal.aborted) setStats({ tambah, edit, hapus });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStats(ZERO_STATS);
+      });
+
+    return () => controller.abort();
+  }, [q, rentang]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = items.length ? (page - 1) * PAGE_SIZE + 1 : 0;
   const to = items.length ? from + items.length - 1 : 0;
 
-  // Total diambil dari pagination.total API
   const angkaKartu: Record<(typeof STAT_CARDS)[number]["key"], number> = {
     total,
     tambah: stats.tambah,
