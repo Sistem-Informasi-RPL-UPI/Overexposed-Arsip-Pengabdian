@@ -13,13 +13,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { db } from "@/lib/db";
 import {
   listArsipFromView,
   parseArsipListFilters,
   requireArsipViewer,
 } from "@/lib/arsip";
-
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Table,
@@ -32,8 +30,9 @@ import {
 
 /* ---------- Data ---------- */
 
-const TZ = "Asia/Jakarta";
 const JUMLAH_AKTIVITAS = 5;
+
+type ArsipItem = Awaited<ReturnType<typeof listArsipFromView>>["items"][number];
 
 type Row = {
   id: string;
@@ -41,7 +40,6 @@ type Row = {
   kategori: string;
   noBerkas: string;
   tanggal: string;
-  waktu: string;
 };
 
 const defaultStyle = {
@@ -57,60 +55,37 @@ const kategoriStyle: Record<string, { badge: string; dot: string }> = {
   "Sarana & Prasarana": defaultStyle,
 };
 
-/**
- * Ubah satu item hasil listArsipFromView menjadi baris tabel.
- * Kalau nama field di database-mu berbeda, cukup sesuaikan fungsi ini.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toRow(a: any): Row {
-  const d = new Date(a.tanggal_arsip);
-  const kategori =
-    typeof a.kategori === "string"
-      ? a.kategori
-      : (a.kategori?.nama ?? a.kategori_nama ?? "-");
-
+function toRow(a: ArsipItem): Row {
   return {
     id: String(a.id),
     judul: a.judul,
-    kategori,
-    noBerkas: a.nomor_surat || a.nomor_arsip || "-",
-    tanggal: d.toLocaleDateString("id-ID", {
-      timeZone: TZ,
+    kategori: a.kategori.nama,
+    noBerkas: a.nomor_surat || a.nomor_arsip,
+    // tanggal_arsip bertipe date (tanpa jam), jadi dibaca sebagai UTC
+    tanggal: new Date(a.tanggal_arsip).toLocaleDateString("id-ID", {
+      timeZone: "UTC",
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     }),
-    waktu:
-      d
-        .toLocaleTimeString("id-ID", {
-          timeZone: TZ,
-          hour: "2-digit",
-          minute: "2-digit",
-          hourCycle: "h23",
-        })
-        .replace(".", ":") + " WIB",
   };
 }
 
 async function getDashboardData(): Promise<{ rows: Row[]; total: number }> {
   const auth = await requireArsipViewer();
-  if (!auth.ok) redirect("/login"); // sesuaikan dengan rute login-mu
+  if (!auth.ok) redirect(auth.response.status === 401 ? "/login" : "/");
 
   const parsed = parseArsipListFilters(
-    new URLSearchParams({ page: "1", limit: String(JUMLAH_AKTIVITAS) }),
+    new URLSearchParams({ page: "1", limit: String(JUMLAH_AKTIVITAS) })
   );
   if (!parsed.ok) return { rows: [], total: 0 };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result: any = await listArsipFromView(parsed.filters);
-  const items: unknown[] = result.data ?? result.items ?? [];
-  const total: number =
-    result.total ?? result.meta?.total ?? (await db.arsip.count());
-
-  return { rows: items.map(toRow), total };
+  const { items, pagination } = await listArsipFromView(parsed.filters);
+  return { rows: items.map(toRow), total: pagination.total };
 }
 
 /* ---------- Sub-komponen ---------- */
+
 
 function Banner() {
   return (
@@ -192,7 +167,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
             href="/arsip/daftar"
             className={cn(
               buttonVariants({ variant: "ghost" }),
-              "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]",
+              "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]"
             )}
           >
             Lihat Seluruh Arsip
@@ -202,7 +177,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
             href="/arsip/tambah"
             className={cn(
               buttonVariants(),
-              "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]",
+              "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]"
             )}
           >
             <Plus className="size-3" aria-hidden />
@@ -219,7 +194,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
               "Judul Arsip",
               "Kategori",
               "No. Berkas / Surat",
-              "Tanggal & Waktu",
+              "Tanggal Arsip",
               "Aksi",
             ].map((h, i) => (
               <TableHead
@@ -228,7 +203,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
                   "h-auto px-4 py-[22px] text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
                   i === 0 && "w-[400px] pl-8",
                   i === 3 && "w-[140px] whitespace-normal py-3.5",
-                  i === 4 && "pr-6 text-right",
+                  i === 4 && "pr-6 text-right"
                 )}
               >
                 {h}
@@ -259,7 +234,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
                   <span
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-[14px] tracking-[0.44px]",
-                      style.badge,
+                      style.badge
                     )}
                   >
                     <span className={cn("size-1.5 rounded-full", style.dot)} />
@@ -269,12 +244,9 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
                 <TableCell className="px-4 text-xs font-semibold uppercase leading-4 tracking-[0.24px] text-black">
                   {row.noBerkas}
                 </TableCell>
-                <TableCell className="px-4 py-3.5">
+                <TableCell className="px-4">
                   <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-black">
                     {row.tanggal}
-                  </p>
-                  <p className="text-[13px] leading-[18px] text-[#757684]">
-                    {row.waktu}
                   </p>
                 </TableCell>
                 <TableCell className="px-6">

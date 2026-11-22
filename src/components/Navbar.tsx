@@ -1,8 +1,9 @@
+// components/Sidebar.tsx
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   LayoutDashboard,
@@ -20,11 +21,15 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import type { getArsipPermissions } from "@/lib/rbac";
+
+type Permissions = ReturnType<typeof getArsipPermissions>;
 
 type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  izin?: keyof Permissions; // kosong = semua user boleh lihat
 };
 
 type NavGroup = {
@@ -44,8 +49,15 @@ const groups: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/arsip/dashboard", icon: LayoutDashboard },
       { label: "Daftar Arsip", href: "/arsip/daftar", icon: Inbox },
+      // Tambahkan izin untuk menu yang ingin disembunyikan dari Kaprodi, mis.:
+      // { label: "Kategori", href: "/arsip/kategori", icon: FolderUp, izin: "canViewKategori" },
       { label: "Kategori", href: "/arsip/kategori", icon: FolderUp },
-      { label: "Log", href: "/arsip/log", icon: ScrollText },
+      {
+        label: "Log",
+        href: "/arsip/log",
+        icon: ScrollText,
+        izin: "canViewLogAktivitas",
+      },
     ],
   },
   {
@@ -104,11 +116,49 @@ function Logo() {
 }
 
 interface AppSidebarProps extends React.HTMLAttributes<HTMLElement> {
+  permissions?: Permissions;
   onLogout?: () => void;
 }
 
-export function AppSidebar({ className, onLogout, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  className,
+  permissions,
+  onLogout,
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  const handleLogout = React.useCallback(async () => {
+    if (onLogout) {
+      onLogout();
+      return;
+    }
+    setLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Logout:", err);
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }, [onLogout, router]);
+
+  // Sembunyikan menu yang izinnya tidak dimiliki user.
+  const visibleGroups = React.useMemo(
+    () =>
+      groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) => !item.izin || permissions?.[item.izin],
+          ),
+        }))
+        .filter((group) => group.items.length > 0),
+    [permissions],
+  );
 
   return (
     <aside
@@ -138,7 +188,7 @@ export function AppSidebar({ className, onLogout, ...props }: AppSidebarProps) {
         >
           <NavLink item={mainItem} active={pathname === mainItem.href} />
 
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.title} className="mt-4 flex flex-col gap-1">
               <p className="px-4 pb-1 text-sm font-bold uppercase tracking-widest text-slate-500">
                 {group.title}
@@ -147,7 +197,10 @@ export function AppSidebar({ className, onLogout, ...props }: AppSidebarProps) {
                 <NavLink
                   key={item.href}
                   item={item}
-                  active={pathname === item.href}
+                  active={
+                    pathname === item.href ||
+                    (item.href !== "/" && pathname.startsWith(`${item.href}/`))
+                  }
                 />
               ))}
             </div>
@@ -159,11 +212,12 @@ export function AppSidebar({ className, onLogout, ...props }: AppSidebarProps) {
       <div className="w-full bg-[#F1F2FE] px-4 py-6">
         <Button
           variant="ghost"
-          onClick={onLogout}
+          onClick={handleLogout}
+          disabled={loggingOut}
           className="h-auto gap-2 p-0 text-lg font-semibold text-red-700 hover:bg-transparent hover:text-red-800"
         >
           <LogOut className="size-6" strokeWidth={2} />
-          Keluar Sistem
+          {loggingOut ? "Keluar..." : "Keluar Sistem"}
         </Button>
       </div>
     </aside>
