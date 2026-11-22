@@ -2,20 +2,10 @@ import type { LocalSessionPayload, SsoRole } from "@/lib/sso";
 
 export type AppRole = SsoRole;
 
-export type RouteAccessDecision =
-  | { allowed: true; role: AppRole }
-  | { allowed: false; reason: "unauthenticated" | "forbidden"; role: AppRole };
+export type RouteAccessDecision = { allowed: true; role: AppRole } | { allowed: false; reason: "unauthenticated" | "forbidden"; role: AppRole };
 
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const WRITE_PAGE_SEGMENTS = new Set([
-  "tambah",
-  "new",
-  "create",
-  "edit",
-  "ubah",
-  "hapus",
-  "kelola",
-]);
+const WRITE_PAGE_SEGMENTS = new Set(["tambah", "new", "create", "edit", "ubah", "hapus", "kelola"]);
 
 export function normalizeRole(role: string | null | undefined): AppRole {
   switch (role) {
@@ -46,11 +36,7 @@ function hasPathSegment(pathname: string, segmentSet: Set<string>): boolean {
 
 function isValidasiOrAccPath(pathname: string): boolean {
   const segments = pathname.toLowerCase().split("/").filter(Boolean);
-  return (
-    segments.includes("validasi") ||
-    segments.includes("acc") ||
-    segments.includes("approve")
-  );
+  return segments.includes("validasi") || segments.includes("acc") || segments.includes("approve");
 }
 
 function isKategoriPath(pathname: string): boolean {
@@ -59,10 +45,7 @@ function isKategoriPath(pathname: string): boolean {
 }
 
 function isLogAktivitasPath(pathname: string): boolean {
-  return (
-    matchesPrefix(pathname, "/api/log-aktivitas") ||
-    matchesPrefix(pathname, "/arsip/log-aktivitas")
-  );
+  return matchesPrefix(pathname, "/api/log-aktivitas") || matchesPrefix(pathname, "/arsip/log-aktivitas");
 }
 
 /**
@@ -70,11 +53,7 @@ function isLogAktivitasPath(pathname: string): boolean {
  * Catatan: kepemilikan baris data ("crud sendiri" vs "view/acc yang lain") tetap
  * wajib dicek di Server Component / Route Handler via getTridharmaPermissions().
  */
-export function evaluateRouteRbac(
-  pathname: string,
-  method: string,
-  session: LocalSessionPayload | null
-): RouteAccessDecision {
+export function evaluateRouteRbac(pathname: string, method: string, session: LocalSessionPayload | null): RouteAccessDecision {
   const isAuthenticated = session !== null;
   const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
   const upperMethod = method.toUpperCase();
@@ -83,9 +62,7 @@ export function evaluateRouteRbac(
   const isWriteIntent = !isRead || hasPathSegment(pathname, WRITE_PAGE_SEGMENTS);
 
   // 1. Modul 7: /tridharma & /api/tridharma
-  const isTridharma =
-    matchesPrefix(pathname, "/tridharma") ||
-    matchesPrefix(pathname, "/api/tridharma");
+  const isTridharma = matchesPrefix(pathname, "/tridharma") || matchesPrefix(pathname, "/api/tridharma");
 
   if (isTridharma) {
     if (isAcc) {
@@ -147,10 +124,8 @@ export function evaluateRouteRbac(
     return { allowed: false, reason: "forbidden", role };
   }
 
-  // 4. Modul 4: /arsip & /api/arsip (PRD 6.1)
-  const isArsip =
-    matchesPrefix(pathname, "/arsip") ||
-    matchesPrefix(pathname, "/api/arsip");
+  // 4. Modul 4: /arsip, /api/arsip, & /api/dashboard (PRD 6.1)
+  const isArsip = matchesPrefix(pathname, "/arsip") || matchesPrefix(pathname, "/api/arsip") || matchesPrefix(pathname, "/api/dashboard");
 
   if (isArsip) {
     if (!isAuthenticated) {
@@ -198,25 +173,14 @@ export function evaluateRouteRbac(
  * Helper izin tingkat record untuk modul Tridarma (/tridharma).
  * Pass `ownerDosenId` (single id atau array id anggota pemilik) untuk cek CRUD sendiri vs ACC lain.
  */
-export function getTridharmaPermissions(
-  session: LocalSessionPayload | null,
-  ownerDosenId?: number | number[] | null
-) {
+export function getTridharmaPermissions(session: LocalSessionPayload | null, ownerDosenId?: number | number[] | null) {
   const isAuthenticated = session !== null;
   const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
 
   const userDosenId = session?.dosen_id ?? null;
-  const isOwner =
-    isAuthenticated &&
-    userDosenId !== null &&
-    ownerDosenId !== undefined &&
-    ownerDosenId !== null &&
-    (Array.isArray(ownerDosenId)
-      ? ownerDosenId.includes(userDosenId)
-      : ownerDosenId === userDosenId);
+  const isOwner = isAuthenticated && userDosenId !== null && ownerDosenId !== undefined && ownerDosenId !== null && (Array.isArray(ownerDosenId) ? ownerDosenId.includes(userDosenId) : ownerDosenId === userDosenId);
 
-  const canWriteOwn =
-    isAuthenticated && (role === "Dosen" || role === "Kaprodi");
+  const canWriteOwn = isAuthenticated && (role === "Dosen" || role === "Kaprodi");
 
   return {
     role,
@@ -236,20 +200,17 @@ export function getTridharmaPermissions(
 export function getArsipPermissions(session: LocalSessionPayload | null) {
   const isAuthenticated = session !== null;
   const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
-  const isDenied =
-    !isAuthenticated || role === "Mahasiswa" || role === "Umum";
+  const isDenied = !isAuthenticated || role === "Mahasiswa" || role === "Umum";
   const staffKaprodi = isAuthenticated && isStaffKaprodiRole(role);
   const kaprodi = isAuthenticated && role === "Kaprodi";
 
   return {
     role,
     isAuthenticated,
-    canView: !isDenied,
+    canViewArsip: !isDenied,
     canViewKategori: staffKaprodi || kaprodi,
     canViewLogAktivitas: staffKaprodi || kaprodi,
-    canCreate: staffKaprodi,
-    canUpdate: staffKaprodi,
-    canDelete: staffKaprodi,
+    canManageArsip: staffKaprodi,
     canManageKategori: staffKaprodi,
     canValidate: kaprodi,
     canAcc: kaprodi,

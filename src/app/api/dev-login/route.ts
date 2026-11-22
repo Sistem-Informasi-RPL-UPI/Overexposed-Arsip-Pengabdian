@@ -64,7 +64,7 @@ function sanitizeNextPath(rawNext: string | null, fallback: string): string {
 export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { error: "Rute login pengembangan dinonaktifkan di production." },
+      { message: "Rute login pengembangan dinonaktifkan di production." },
       { status: 403 }
     );
   }
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     getSessionSecretKey();
   } catch {
     return NextResponse.json(
-      { error: "Konfigurasi SESSION_SECRET pada server belum diatur." },
+      { message: "Konfigurasi SESSION_SECRET pada server belum diatur." },
       { status: 500 }
     );
   }
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
     const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
       {
-        error: `Gagal memproses login pengujian: ${detail}`,
+        message: `Gagal memproses login pengujian: ${detail}`,
       },
       { status: 500 }
     );
