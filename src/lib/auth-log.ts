@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { catatLog } from "@/lib/log-aktivitas";
 
 interface AuthLogInput {
   aksi: "login" | "login_gagal";
@@ -7,29 +7,19 @@ interface AuthLogInput {
   detail: string;
 }
 
-/**
- * Mencatat login sukses dan gagal ke log_aktivitas (PRD 4 dan 6.4).
- * Untuk login gagal, userId dan userName dikosongkan (null).
- * Kegagalan mencatat log tidak membatalkan alur login.
- */
+/** Pintasan catatLog untuk login sukses dan gagal (modul auth, objek sso). */
 export async function recordAuthLog({
   aksi,
   userId,
   userName,
   detail,
 }: AuthLogInput): Promise<void> {
-  try {
-    await db.logAktivitas.create({
-      data: {
-        user_id: userId ?? null,
-        user_nama: userName ?? null,
-        modul: "auth",
-        aksi,
-        objek: "sso",
-        detail,
-      },
-    });
-  } catch (err) {
-    console.error("Gagal mencatat log aktivitas auth:", err);
-  }
+  await catatLog({
+    userId,
+    userNama: userName,
+    modul: "auth",
+    aksi,
+    objek: "sso",
+    detail,
+  });
 }
