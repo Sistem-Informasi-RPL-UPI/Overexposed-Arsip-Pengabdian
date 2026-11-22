@@ -46,6 +46,11 @@ CLAUDE.local.md
 # python
 /crawler/.venv/
 __pycache__/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
 
 .vscode/
 
