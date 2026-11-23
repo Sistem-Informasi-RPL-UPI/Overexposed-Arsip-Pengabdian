@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.27. Berdasarkan ERD versi 6.
+Versi: 1.28. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -34,6 +34,7 @@ Versi: 1.27. Berdasarkan ERD versi 6.
 | 1.25  | 2026-11-23 | Keputusan terbuka 19 ditutup: data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`. Keputusan 20 ditutup: data SINTA yang dihapus boleh muncul lagi saat crawl. Keputusan terbuka 21 ditambahkan (perlindungan isian dosen hanya bertahan satu kali crawl karena aturan gabung 5.3). |
 | 1.26  | 2026-11-23 | Keputusan 21 ditutup dengan pilihan (b): baris `manual` tetap `manual` saat ditemukan crawl, jadi crawl selalu hanya mengisi kolom kosong (5.3, 8). Keputusan 16 diubah sesuai itu. Loader tidak lagi mengubah `sumber` saat `ON CONFLICT`. |
 | 1.27  | 2026-11-23 | Fungsi kunci anti-dobel dan normalisasi nama di Next.js (issue #14, 5.3): `src/lib/kunci.ts` (`normTeks`, `kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`), port dari `loader.py` tanpa aturan baru. Aturan kunci per tabel di `loader.py` dipindah ke fungsi `kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku` (hasil tidak berubah). Fixture bersama `crawler/tests/fixtures/kunci.json` dipakai Vitest dan `unittest`. |
+| 1.28  | 2026-11-23 | Layanan FastAPI crawler (issue #15, 8.3): antrean diganti kunci tunggal (permintaan saat crawl berjalan dibalas `409`), `POST /sync` menerima `sinta_id` opsional serta `pemicu_id` dan `pemicu_nama` untuk `log_aktivitas`, aturan 7 hari dan pemesanan `IN_PROGRESS` dikerjakan atomik di layanan, pembersihan `IN_PROGRESS` hanya untuk yang lebih tua dari `SISA_IN_PROGRESS_MENIT`. Bawaan jeda tab 1,5 detik. `requirement.txt` diganti nama menjadi `requirements.txt`, `Dockerfile` dan `.env.example` diisi. |
 
 ---
 
@@ -410,12 +411,12 @@ Aturan:
 - Layanan Python memakai `DATABASE_URL` berupa URL pooled.
 - Setiap sinkron dicatat di `log_aktivitas` dengan `modul = 7`, termasuk pemicu, `sinta_id` (atau semua dosen), dan status akhir.
 
-Endpoint layanan: `GET /health`, `POST /sync`.
+Endpoint layanan: `GET /health`, `POST /sync` (rincian di 8.3).
 
 Variabel lingkungan:
 
 - Next.js (Vercel): `CRAWLER_URL` (alamat layanan Render), `INTERNAL_KEY`. Keduanya harus diisi juga di environment Vercel.
-- Layanan Python (Render): `INTERNAL_KEY` (nilai sama dengan Next.js), `DATABASE_URL` (URL langsung), `PORT` (diisi Render).
+- Layanan Python (Render): `INTERNAL_KEY` (nilai sama dengan Next.js), `DATABASE_URL` (URL langsung), `PORT` (diisi Render). Opsional: `DELAY_CATEGORY` (bawaan 1,5), `DELAY_DOSEN_MIN`, `DELAY_DOSEN_MAX`, `SISA_IN_PROGRESS_MENIT` (bawaan 10). Contoh di `crawler/.env.example`.
 - Nilai rahasia dibuat sendiri dan tidak pernah ditulis di repo atau di chat. File `.env` wajib di-gitignore.
 
 ### 8.1 Hak menjalankan crawling
@@ -472,6 +473,36 @@ Variabel lingkungan:
 - Form tambah data manual menampilkan pesan 409 duplikat apa adanya, termasuk pesan "sudah ada di data". Bila respons `200` memuat `ditautkan = true`, tampilkan pesan bahwa data itu sudah ada dan sudah dihubungkan ke akun pengguna, lengkap dengan judulnya. Tidak ada tombol tambahan.
 - Bagian pengajaran (5.4): Kaprodi dan Staff Kaprodi hanya melihat `kelas` dan `berkas_pengajaran`, jadi tombol tambah, ubah, hapus di bagian itu tidak ditampilkan untuk mereka. Mahasiswa dan Umum tidak melihat bagian ini sama sekali.
 
+### 8.3 Kontrak layanan crawler (issue #15)
+
+Penerapan di `crawler/app/main.py` dan `crawler/app/loader.py`. Galat memakai kunci `message`, sama dengan 6.7.
+
+`POST /sync`, header `X-Internal-Key` wajib. Body (semua opsional):
+
+```json
+{ "sinta_id": "6681751", "pemicu_id": "<uuid sub SSO>", "pemicu_nama": "<nama dari sesi>" }
+```
+
+| Respons | Kapan                                                                                                  |
+| ------- | ------------------------------------------------------------------------------------------------------ |
+| `202`   | Ada dosen yang diproses. `{ "message", "data": { "diproses": [sinta_id], "dilewati": [sinta_id] } }`. Crawl berjalan di background. |
+| `200`   | Semua dosen yang diminta dilewati aturan 7 hari. Bentuk `data` sama. Tetap dicatat di `log_aktivitas`. |
+| `401`   | Header kunci tidak ada atau salah.                                                                     |
+| `404`   | `sinta_id` dikirim tetapi tidak ada di tabel `dosen`. Layanan tidak membuat baris `dosen`.            |
+| `409`   | Crawl lain sedang berjalan: `{ "message": "Sinkron sedang berjalan" }`. Tidak diantrekan.               |
+| `422`   | Body tidak valid, misalnya `pemicu_id` bukan UUID.                                                     |
+
+Aturan penerapan:
+
+- `sinta_id` kosong atau tidak dikirim berarti semua dosen yang punya `sinta_id` dan lolos aturan 7 hari.
+- Pemilihan dosen dan penandaan `IN_PROGRESS` dilakukan dalam satu transaksi (`SELECT ... FOR UPDATE` lalu `UPDATE`). Logika aturannya fungsi murni `perlu_sinkron`, dan status akhirnya `tentukan_status`.
+- Baris yang sudah `IN_PROGRESS` ikut diproses, karena di luar crawl yang sedang berjalan status itu berarti baris sudah dipesan Next.js (langkah 3 di atas) setelah aturan yang sama dicek di sana. Jadi route Next.js (#16) boleh memesan `IN_PROGRESS` lebih dulu atau tidak, dua-duanya jalan.
+- Kunci "satu crawl" berada di memori layanan (`threading.Lock`), karena URL pooled Neon (mode transaksi) tidak mendukung advisory lock sesi. Ini cukup untuk satu instance Render. Status per dosen tetap disimpan di database.
+- Saat layanan menyala, `IN_PROGRESS` yang `updated_at`-nya lebih tua dari `SISA_IN_PROGRESS_MENIT` ditandai `FAILED`. Yang lebih muda dibiarkan, supaya pesanan Next.js yang membangunkan layanan tidak ikut terhapus.
+- Bila crawl berhenti karena galat tak terduga, dosen yang belum selesai ditandai `FAILED`.
+- `log_aktivitas`: satu baris per permintaan, `modul = 7`, `aksi = sinkron`, `objek = dosen`, `user_id` dan `user_nama` dari `pemicu_id` dan `pemicu_nama`, `detail` misalnya `Pemicu: X. Target: sinta_id 6681751. Hasil: 6681751 SUCCESS. Dilewati (aturan 7 hari): ...`. Route Next.js (#16) perlu mengirim `pemicu_id` dan `pemicu_nama` dari sesi.
+- Jalan lokal: dari `crawler/app`, `uvicorn main:app --port 8000` dengan `crawler/.env`. Docker: `docker build -t crawler crawler/`. Dependensi tes ada di `crawler/requirements-dev.txt` (`httpx` untuk `TestClient`).
+
 ## 9. Porting MariaDB ke Postgres (Neon) dan Prisma
 
 **Kode Python (`sinta_to_db.py` menjadi `loader.py`):**
@@ -487,7 +518,7 @@ Variabel lingkungan:
 | `UPDATE ... JOIN` (di `backfill_anggota`) | `UPDATE ... SET ... FROM ... WHERE ...`                            |
 | Backtick                                  | Tanda kutip ganda atau tanpa pembungkus                            |
 | `DB_CONFIG` dengan `root` tanpa password  | `DATABASE_URL` dari environment, `sslmode=require`                 |
-| `main()` dan argparse                     | fungsi `sync_dosen(sinta_id)` untuk FastAPI                        |
+| `main()` dan argparse                     | `pilih_dosen` dan `jalankan_sinkron` untuk FastAPI (8.3)           |
 
 Placeholder `%s`, `COALESCE`, `GREATEST`, `NULLIF`, `CONCAT_WS` tetap bisa dipakai. Uji penulisan nilai string ke kolom enum Postgres.
 
@@ -572,8 +603,11 @@ sacibiru-modul/
 │  │  ├─ test_kegiatan_iprs.py    (parser dan loader kegiatan/IPRS; tes integrasi opsional lewat CRAWLER_TEST_DATABASE_URL)
 │  │  ├─ test_gabung_manual.py    (penggabungan baris manual oleh crawl; tes integrasi opsional, selalu di-rollback)
 │  │  ├─ test_kunci.py            (kunci anti-dobel dan norm_nama terhadap fixture bersama)
+│  │  ├─ test_main.py             (endpoint /health dan /sync: 401, 202, 404, 409)
+│  │  ├─ test_sinkron.py          (aturan 7 hari, status akhir, pemilihan dosen, pembersihan IN_PROGRESS)
 │  │  └─ fixtures/kunci.json      (masukan dan kunci yang diharapkan, dibaca juga oleh tests/lib/kunci.test.ts)
 │  ├─ requirements.txt
+│  ├─ requirements-dev.txt         (httpx untuk TestClient)
 │  ├─ Dockerfile
 │  └─ .env.example
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)

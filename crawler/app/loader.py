@@ -1,15 +1,18 @@
 """
 loader.py
-Crawl SINTA lalu simpan ke Postgres (Neon). Dipanggil dari FastAPI lewat sync_dosen(sinta_id).
+Crawl SINTA lalu simpan ke Postgres (Neon). Dipanggil dari FastAPI (main.py) lewat pilih_dosen lalu
+jalankan_sinkron, yang memanggil sync_dosen per dosen.
 
 Memakai parser dari sinta.py.
 Hanya meng-UPDATE baris dosen yang sudah ada (dibuat oleh Next.js saat sinta_id diisi).
 Status IPRS disimpan apa adanya dari SINTA (hanya dirapikan spasinya). Kegiatan tidak punya status.
 """
 import hashlib
+import random
 import re
 import time
 import unicodedata
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 from bs4 import BeautifulSoup
@@ -414,6 +417,28 @@ def backfill_anggota(conn):
 
 
 # ==========================================
+# ATURAN SINKRON (logika murni, PRD 5.3)
+# ==========================================
+def tentukan_status(views):
+    """SUCCESS bila semua tab berhasil, PARTIAL bila sebagian gagal, FAILED bila semua gagal."""
+    gagal = sum(1 for r in views.values() if not r["ok"])
+    if not views or gagal == len(views):
+        return "FAILED"
+    return "PARTIAL" if gagal else "SUCCESS"
+
+
+def perlu_sinkron(sync_status, last_synced_at, sekarang):
+    """
+    Aturan 7 hari dengan pengecualian FAILED dan PARTIAL. IN_PROGRESS ikut diproses karena di luar
+    crawl yang sedang berjalan, status itu berarti baris sudah dipesan Next.js (PRD 8 langkah 3)
+    setelah aturan yang sama dicek di sana. Sisa IN_PROGRESS lama dibersihkan saat layanan menyala.
+    """
+    if sync_status in (None, "FAILED", "PARTIAL", "IN_PROGRESS") or last_synced_at is None:
+        return True
+    return sekarang - last_synced_at > timedelta(days=config.SYNC_ULANG_SETELAH_HARI)
+
+
+# ==========================================
 # PROSES SATU DOSEN
 # ==========================================
 def proses_dosen(conn, d):
@@ -423,7 +448,6 @@ def proses_dosen(conn, d):
     status_akhir = "FAILED"
     try:
         hasil = crawl_ke_memori(sinta_id)
-        gagal = [v for v, r in hasil["views"].items() if not r["ok"]]
 
         with conn.cursor() as cur:
             simpan_profil(cur, dosen_id, hasil["profil"])
@@ -452,13 +476,7 @@ def proses_dosen(conn, d):
                 catatan = " (kemungkinan terpotong, batas SINTA publik)" if jumlah >= 10 else ""
                 print(f"    [{view}] {jumlah} item{catatan}")
         conn.commit()
-
-        if len(gagal) == len(hasil["views"]):
-            status_akhir = "FAILED"
-        elif gagal:
-            status_akhir = "PARTIAL"
-        else:
-            status_akhir = "SUCCESS"
+        status_akhir = tentukan_status(hasil["views"])
 
     except Exception as e:
         conn.rollback()
@@ -482,32 +500,111 @@ def _connect():
     return psycopg.connect(config.DATABASE_URL, row_factory=dict_row, sslmode="require")
 
 
-def sync_dosen(sinta_id):
+def pilih_dosen(sinta_id=None):
     """
-    Sinkronkan satu dosen. Status IN_PROGRESS sudah diset atomik oleh Next.js sebelum
-    layanan ini dipanggil. Mengembalikan status akhir, atau None bila baris dosen tidak ada.
+    Pilih dosen yang lolos aturan 7 hari (satu sinta_id, atau semua bila None), lalu tandai
+    IN_PROGRESS dalam satu transaksi. Hanya meng-UPDATE baris dosen yang sudah ada.
+    Mengembalikan (diproses, dilewati, ditemukan). `ditemukan` False bila sinta_id tidak terdaftar.
     """
-    sinta_id = str(sinta_id).strip()
-    conn = _connect()
-    try:
+    sekarang = datetime.now(timezone.utc)
+    with _connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, nama, sinta_id FROM dosen WHERE sinta_id = %s", (sinta_id,))
-            d = cur.fetchone()
-        conn.commit()
-        if d is None:
-            print(f"[!] sinta_id {sinta_id} tidak ada di tabel dosen, dilewati")
-            return None
+            sql = """SELECT id, nama, sinta_id, sync_status, last_synced_at FROM dosen
+                     WHERE sinta_id IS NOT NULL AND sinta_id <> ''"""
+            args = ()
+            if sinta_id:
+                sql += " AND sinta_id = %s"
+                args = (sinta_id,)
+            cur.execute(sql + " ORDER BY id FOR UPDATE", args)
+            semua = cur.fetchall()
 
-        print(f"{d['nama'] or 'Dosen #' + str(d['id'])} (SINTA ID {sinta_id})")
+            diproses = [d for d in semua if perlu_sinkron(d["sync_status"], d["last_synced_at"], sekarang)]
+            dilewati = [d for d in semua if d not in diproses]
+            if diproses:
+                cur.execute(
+                    "UPDATE dosen SET sync_status = 'IN_PROGRESS', updated_at = NOW() WHERE id = ANY(%s)",
+                    ([d["id"] for d in diproses],),
+                )
+        conn.commit()
+    return diproses, dilewati, bool(semua)
+
+
+def sync_dosen(d):
+    """Sinkronkan satu dosen hasil pilih_dosen dengan koneksi sendiri. Mengembalikan status akhir."""
+    with _connect() as conn:
+        print(f"{d['nama'] or 'Dosen #' + str(d['id'])} (SINTA ID {d['sinta_id']})")
         status = proses_dosen(conn, d)
-        backfill_anggota(conn)
         print(f"  => {status}")
         return status
+
+
+def ringkasan_log(target, pemicu_nama, hasil, dilewati):
+    """Teks kolom detail log_aktivitas untuk satu permintaan sinkron."""
+    bagian = [
+        f"Pemicu: {pemicu_nama or 'tidak diketahui'}",
+        f"Target: {'sinta_id ' + target if target else 'semua dosen'}",
+        "Hasil: " + (", ".join(f"{s} {st}" for s, st in hasil.items()) or "tidak ada yang diproses"),
+    ]
+    if dilewati:
+        bagian.append("Dilewati (aturan 7 hari): " + ", ".join(dilewati))
+    return ". ".join(bagian)
+
+
+def catat_log_aktivitas(pemicu_id, pemicu_nama, detail):
+    """Kegagalan menulis log hanya dicetak, supaya hasil sinkron tidak ikut batal (sama dengan catatLog)."""
+    try:
+        with _connect() as conn:
+            conn.execute(
+                """INSERT INTO log_aktivitas (user_id, user_nama, modul, aksi, objek, detail)
+                   VALUES (%s, %s, '7', 'sinkron', 'dosen', %s)""",
+                (pemicu_id, pemicu_nama, detail),
+            )
+    except Exception as e:
+        print(f"[log] gagal mencatat log_aktivitas: {type(e).__name__}: {e}")
+
+
+def jalankan_sinkron(diproses, dilewati, target=None, pemicu_id=None, pemicu_nama=None):
+    """
+    Dijalankan di thread background. Dosen yang belum selesai saat terjadi galat tak terduga
+    ditandai FAILED, supaya tidak tertinggal IN_PROGRESS.
+    """
+    hasil = {}
+    try:
+        for i, d in enumerate(diproses):
+            if i:
+                time.sleep(random.uniform(config.DELAY_DOSEN_MIN, config.DELAY_DOSEN_MAX))
+            try:
+                hasil[d["sinta_id"]] = sync_dosen(d)
+            except Exception as e:
+                print(f"[sync] {d['sinta_id']} error: {type(e).__name__}: {e}")
+                hasil[d["sinta_id"]] = "FAILED"
+        with _connect() as conn:
+            backfill_anggota(conn)
+    except Exception as e:
+        print(f"[sync] error: {type(e).__name__}: {e}")
     finally:
-        conn.close()
+        sisa = [d["id"] for d in diproses if d["sinta_id"] not in hasil]
+        for d in diproses:
+            hasil.setdefault(d["sinta_id"], "FAILED")
+        if sisa:
+            try:
+                with _connect() as conn:
+                    conn.execute("UPDATE dosen SET sync_status = 'FAILED', updated_at = NOW() WHERE id = ANY(%s)", (sisa,))
+            except Exception as e:
+                print(f"[sync] gagal menandai FAILED: {type(e).__name__}: {e}")
+        catat_log_aktivitas(pemicu_id, pemicu_nama,
+                            ringkasan_log(target, pemicu_nama, hasil, [d["sinta_id"] for d in dilewati]))
+    return hasil
 
 
 def tandai_sisa_in_progress():
-    """Dipanggil sekali saat layanan menyala: sisa IN_PROGRESS yang mati di tengah jalan jadi FAILED."""
+    """
+    Dipanggil sekali saat layanan menyala: IN_PROGRESS yang lebih tua dari SISA_IN_PROGRESS_MENIT
+    adalah sisa crawl yang mati di tengah jalan, jadi FAILED. Mengembalikan jumlah baris.
+    """
     with psycopg.connect(config.DATABASE_URL, sslmode="require") as conn:
-        conn.execute("UPDATE dosen SET sync_status = 'FAILED' WHERE sync_status = 'IN_PROGRESS'")
+        return conn.execute(SQL_SISA_IN_PROGRESS, (config.SISA_IN_PROGRESS_MENIT,)).rowcount
+
+
+SQL_SISA_IN_PROGRESS = """UPDATE dosen SET sync_status = 'FAILED', updated_at = NOW()
+    WHERE sync_status = 'IN_PROGRESS' AND updated_at < NOW() - (%s * INTERVAL '1 minute')"""
