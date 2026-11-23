@@ -36,10 +36,7 @@ function PermissionItem({
 
 async function TridharmaContent() {
   const session = await getSession();
-  const ownPerms = getTridharmaPermissions(
-    session,
-    session?.dosen_id ?? 999999
-  );
+  const ownPerms = getTridharmaPermissions(session);
   const otherPerms = getTridharmaPermissions(session, -1);
 
   return (
@@ -73,15 +70,11 @@ async function TridharmaContent() {
           />
           <PermissionItem
             label="Edit & Hapus data milik sendiri"
-            allowed={ownPerms.canUpdate && ownPerms.canDelete}
+            allowed={ownPerms.canManageOwn}
           />
           <PermissionItem
             label="Edit & Hapus data dosen lain"
             allowed={otherPerms.canUpdate || otherPerms.canDelete}
-          />
-          <PermissionItem
-            label="ACC / Validasi data dosen lain"
-            allowed={otherPerms.canAcc}
           />
         </ul>
       </div>

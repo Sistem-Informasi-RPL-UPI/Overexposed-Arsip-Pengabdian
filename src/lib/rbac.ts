@@ -50,7 +50,7 @@ function isLogAktivitasPath(pathname: string): boolean {
 
 /**
  * Evaluasi RBAC di tingkat route + HTTP method (dipakai oleh src/proxy.ts).
- * Catatan: kepemilikan baris data ("crud sendiri" vs "view/acc yang lain") tetap
+ * Catatan: kepemilikan baris data (ubah dan hapus hanya data milik sendiri) tetap
  * wajib dicek di Server Component / Route Handler via getTridharmaPermissions().
  */
 export function evaluateRouteRbac(pathname: string, method: string, session: LocalSessionPayload | null): RouteAccessDecision {
@@ -61,25 +61,16 @@ export function evaluateRouteRbac(pathname: string, method: string, session: Loc
   const isAcc = isValidasiOrAccPath(pathname);
   const isWriteIntent = !isRead || hasPathSegment(pathname, WRITE_PAGE_SEGMENTS);
 
-  // 1. Modul 7: /tridharma & /api/tridharma
-  const isTridharma = matchesPrefix(pathname, "/tridharma") || matchesPrefix(pathname, "/api/tridharma");
+  // 1. Modul 7: halaman /tridharma dan API /api/tridarma (PRD 5.6, 5.9). Tidak ada ACC/validasi di modul 7.
+  const isTridharma =
+    matchesPrefix(pathname, "/tridharma") || matchesPrefix(pathname, "/api/tridharma") || matchesPrefix(pathname, "/api/tridarma");
 
   if (isTridharma) {
-    if (isAcc) {
-      if (!isAuthenticated) {
-        return { allowed: false, reason: "unauthenticated", role };
-      }
-      if (role !== "Kaprodi") {
-        return { allowed: false, reason: "forbidden", role };
-      }
-      return { allowed: true, role };
-    }
-
     if (isWriteIntent) {
       if (!isAuthenticated) {
         return { allowed: false, reason: "unauthenticated", role };
       }
-      if (role === "Dosen" || role === "Kaprodi") {
+      if (canWriteTridharma(role)) {
         return { allowed: true, role };
       }
       return { allowed: false, reason: "forbidden", role };
@@ -169,9 +160,16 @@ export function evaluateRouteRbac(pathname: string, method: string, session: Loc
   return { allowed: true, role };
 }
 
+// Peran yang boleh menambah, mengubah, dan menghapus data tridarma milik sendiri (PRD 5.6).
+// Pengecualian bagian pengajaran (PRD 5.4) dicek di handler pengajaran.
+function canWriteTridharma(role: AppRole): boolean {
+  return role === "Dosen" || role === "Kaprodi" || isStaffKaprodiRole(role);
+}
+
 /**
- * Helper izin tingkat record untuk modul Tridarma (/tridharma).
- * Pass `ownerDosenId` (single id atau array id anggota pemilik) untuk cek CRUD sendiri vs ACC lain.
+ * Helper izin modul Tridarma.
+ * `canManageOwn`: izin peran untuk mengubah dan menghapus data milik sendiri, tanpa melihat satu baris tertentu.
+ * `canUpdate`/`canDelete`: izin untuk baris tertentu. Pass `ownerDosenId` (id dosen yang tertaut ke baris itu).
  */
 export function getTridharmaPermissions(session: LocalSessionPayload | null, ownerDosenId?: number | number[] | null) {
   const isAuthenticated = session !== null;
@@ -180,17 +178,17 @@ export function getTridharmaPermissions(session: LocalSessionPayload | null, own
   const userDosenId = session?.dosen_id ?? null;
   const isOwner = isAuthenticated && userDosenId !== null && ownerDosenId !== undefined && ownerDosenId !== null && (Array.isArray(ownerDosenId) ? ownerDosenId.includes(userDosenId) : ownerDosenId === userDosenId);
 
-  const canWriteOwn = isAuthenticated && (role === "Dosen" || role === "Kaprodi");
+  const canManageOwn = isAuthenticated && canWriteTridharma(role);
 
   return {
     role,
     isAuthenticated,
     isOwner,
     canView: true,
-    canCreate: canWriteOwn,
-    canUpdate: canWriteOwn && isOwner,
-    canDelete: canWriteOwn && isOwner,
-    canAcc: isAuthenticated && role === "Kaprodi" && !isOwner,
+    canCreate: canManageOwn,
+    canManageOwn,
+    canUpdate: canManageOwn && isOwner,
+    canDelete: canManageOwn && isOwner,
   };
 }
 
