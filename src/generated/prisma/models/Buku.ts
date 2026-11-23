@@ -46,6 +46,7 @@ export type BukuMinAggregateOutputType = {
   tahun: number | null
   tempat_terbit: string | null
   isbn: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -60,6 +61,7 @@ export type BukuMaxAggregateOutputType = {
   tahun: number | null
   tempat_terbit: string | null
   isbn: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -74,6 +76,7 @@ export type BukuCountAggregateOutputType = {
   tahun: number
   tempat_terbit: number
   isbn: number
+  sumber: number
   created_at: number
   updated_at: number
   _all: number
@@ -100,6 +103,7 @@ export type BukuMinAggregateInputType = {
   tahun?: true
   tempat_terbit?: true
   isbn?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -114,6 +118,7 @@ export type BukuMaxAggregateInputType = {
   tahun?: true
   tempat_terbit?: true
   isbn?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -128,6 +133,7 @@ export type BukuCountAggregateInputType = {
   tahun?: true
   tempat_terbit?: true
   isbn?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
   _all?: true
@@ -229,6 +235,7 @@ export type BukuGroupByOutputType = {
   tahun: number | null
   tempat_terbit: string | null
   isbn: string | null
+  sumber: $Enums.SumberData
   created_at: Date
   updated_at: Date
   _count: BukuCountAggregateOutputType | null
@@ -266,6 +273,7 @@ export type BukuWhereInput = {
   tahun?: Prisma.IntNullableFilter<"Buku"> | number | null
   tempat_terbit?: Prisma.StringNullableFilter<"Buku"> | string | null
   isbn?: Prisma.StringNullableFilter<"Buku"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Buku"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Buku"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Buku"> | Date | string
   buku_dosen?: Prisma.BukuDosenListRelationFilter
@@ -281,6 +289,7 @@ export type BukuOrderByWithRelationInput = {
   tahun?: Prisma.SortOrderInput | Prisma.SortOrder
   tempat_terbit?: Prisma.SortOrderInput | Prisma.SortOrder
   isbn?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   buku_dosen?: Prisma.BukuDosenOrderByRelationAggregateInput
@@ -299,6 +308,7 @@ export type BukuWhereUniqueInput = Prisma.AtLeast<{
   tahun?: Prisma.IntNullableFilter<"Buku"> | number | null
   tempat_terbit?: Prisma.StringNullableFilter<"Buku"> | string | null
   isbn?: Prisma.StringNullableFilter<"Buku"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Buku"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Buku"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Buku"> | Date | string
   buku_dosen?: Prisma.BukuDosenListRelationFilter
@@ -314,6 +324,7 @@ export type BukuOrderByWithAggregationInput = {
   tahun?: Prisma.SortOrderInput | Prisma.SortOrder
   tempat_terbit?: Prisma.SortOrderInput | Prisma.SortOrder
   isbn?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   _count?: Prisma.BukuCountOrderByAggregateInput
@@ -336,6 +347,7 @@ export type BukuScalarWhereWithAggregatesInput = {
   tahun?: Prisma.IntNullableWithAggregatesFilter<"Buku"> | number | null
   tempat_terbit?: Prisma.StringNullableWithAggregatesFilter<"Buku"> | string | null
   isbn?: Prisma.StringNullableWithAggregatesFilter<"Buku"> | string | null
+  sumber?: Prisma.EnumSumberDataWithAggregatesFilter<"Buku"> | $Enums.SumberData
   created_at?: Prisma.DateTimeWithAggregatesFilter<"Buku"> | Date | string
   updated_at?: Prisma.DateTimeWithAggregatesFilter<"Buku"> | Date | string
 }
@@ -349,6 +361,7 @@ export type BukuCreateInput = {
   tahun?: number | null
   tempat_terbit?: string | null
   isbn?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   buku_dosen?: Prisma.BukuDosenCreateNestedManyWithoutBukuInput
@@ -364,6 +377,7 @@ export type BukuUncheckedCreateInput = {
   tahun?: number | null
   tempat_terbit?: string | null
   isbn?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   buku_dosen?: Prisma.BukuDosenUncheckedCreateNestedManyWithoutBukuInput
@@ -378,6 +392,7 @@ export type BukuUpdateInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buku_dosen?: Prisma.BukuDosenUpdateManyWithoutBukuNestedInput
@@ -393,6 +408,7 @@ export type BukuUncheckedUpdateInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   buku_dosen?: Prisma.BukuDosenUncheckedUpdateManyWithoutBukuNestedInput
@@ -408,6 +424,7 @@ export type BukuCreateManyInput = {
   tahun?: number | null
   tempat_terbit?: string | null
   isbn?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -421,6 +438,7 @@ export type BukuUpdateManyMutationInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -435,6 +453,7 @@ export type BukuUncheckedUpdateManyInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -449,6 +468,7 @@ export type BukuCountOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   tempat_terbit?: Prisma.SortOrder
   isbn?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -468,6 +488,7 @@ export type BukuMaxOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   tempat_terbit?: Prisma.SortOrder
   isbn?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -482,6 +503,7 @@ export type BukuMinOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   tempat_terbit?: Prisma.SortOrder
   isbn?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -519,6 +541,7 @@ export type BukuCreateWithoutBuku_dosenInput = {
   tahun?: number | null
   tempat_terbit?: string | null
   isbn?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -533,6 +556,7 @@ export type BukuUncheckedCreateWithoutBuku_dosenInput = {
   tahun?: number | null
   tempat_terbit?: string | null
   isbn?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -562,6 +586,7 @@ export type BukuUpdateWithoutBuku_dosenInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -576,6 +601,7 @@ export type BukuUncheckedUpdateWithoutBuku_dosenInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tempat_terbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   isbn?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -621,6 +647,7 @@ export type BukuSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   tahun?: boolean
   tempat_terbit?: boolean
   isbn?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
   buku_dosen?: boolean | Prisma.Buku$buku_dosenArgs<ExtArgs>
@@ -637,6 +664,7 @@ export type BukuSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   tahun?: boolean
   tempat_terbit?: boolean
   isbn?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["buku"]>
@@ -651,6 +679,7 @@ export type BukuSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   tahun?: boolean
   tempat_terbit?: boolean
   isbn?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["buku"]>
@@ -665,11 +694,12 @@ export type BukuSelectScalar = {
   tahun?: boolean
   tempat_terbit?: boolean
   isbn?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }
 
-export type BukuOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "judul" | "kategori" | "penulis" | "penerbit" | "tahun" | "tempat_terbit" | "isbn" | "created_at" | "updated_at", ExtArgs["result"]["buku"]>
+export type BukuOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "judul" | "kategori" | "penulis" | "penerbit" | "tahun" | "tempat_terbit" | "isbn" | "sumber" | "created_at" | "updated_at", ExtArgs["result"]["buku"]>
 export type BukuInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   buku_dosen?: boolean | Prisma.Buku$buku_dosenArgs<ExtArgs>
   _count?: boolean | Prisma.BukuCountOutputTypeDefaultArgs<ExtArgs>
@@ -692,6 +722,7 @@ export type $BukuPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     tahun: number | null
     tempat_terbit: string | null
     isbn: string | null
+    sumber: $Enums.SumberData
     created_at: Date
     updated_at: Date
   }, ExtArgs["result"]["buku"]>
@@ -1127,6 +1158,7 @@ export interface BukuFieldRefs {
   readonly tahun: Prisma.FieldRef<"Buku", 'Int'>
   readonly tempat_terbit: Prisma.FieldRef<"Buku", 'String'>
   readonly isbn: Prisma.FieldRef<"Buku", 'String'>
+  readonly sumber: Prisma.FieldRef<"Buku", 'SumberData'>
   readonly created_at: Prisma.FieldRef<"Buku", 'DateTime'>
   readonly updated_at: Prisma.FieldRef<"Buku", 'DateTime'>
 }

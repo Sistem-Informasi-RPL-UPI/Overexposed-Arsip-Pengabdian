@@ -21,6 +21,13 @@ enum PublikasiSource {
   sinta_garuda
   sinta_googlescholar
   sinta_rama
+  manual
+}
+
+// Asal baris data tridarma (PRD 5.3). Beda dengan PublikasiSource: ini asal baris, bukan asal per paper.
+enum SumberData {
+  sinta
+  manual
 }
 
 enum JenisKegiatan {
@@ -115,21 +122,22 @@ model CrawlLog {
 }
 
 model Publikasi {
-  id         Int      @id @default(autoincrement())
-  judul_hash String   @unique @db.Char(32)
+  id         Int        @id @default(autoincrement())
+  judul_hash String     @unique @db.Char(32)
   judul      String
-  tahun      Int?     @db.SmallInt
+  tahun      Int?       @db.SmallInt
   penulis    String?
   jurnal     String?
-  sitasi     Int      @default(0)
+  sitasi     Int        @default(0)
   link       String?
-  kuartil    String?  @db.VarChar(10)
-  jenis      String?  @db.VarChar(50)
-  penerbit   String?  @db.VarChar(200)
-  doi        String?  @db.VarChar(150)
-  akreditasi String?  @db.VarChar(50)
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  kuartil    String?    @db.VarChar(10)
+  jenis      String?    @db.VarChar(50)
+  penerbit   String?    @db.VarChar(200)
+  doi        String?    @db.VarChar(150)
+  akreditasi String?    @db.VarChar(50)
+  sumber     SumberData @default(sinta)
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
 
   publikasi_dosen PublikasiDosen[]
 
@@ -161,8 +169,8 @@ model Kegiatan {
   tahun        Int?          @db.SmallInt
   skema        String?       @db.VarChar(255)
   dana_nominal Decimal       @default(0) @db.Decimal(18, 2)
-  status       String?       @db.VarChar(30)
   sumber_dana  String?       @db.VarChar(100)
+  sumber       SumberData    @default(sinta)
   created_at   DateTime      @default(now()) @db.Timestamptz(6)
   updated_at   DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
 
@@ -189,17 +197,19 @@ model KegiatanAnggota {
 }
 
 model Iprs {
-  id               Int      @id @default(autoincrement())
-  kunci            String   @unique @db.Char(32)
+  id               Int        @id @default(autoincrement())
+  kunci            String     @unique @db.Char(32)
   judul            String
-  jenis            String?  @db.VarChar(100)
-  tahun            Int?     @db.SmallInt
-  nomor_permohonan String?  @db.VarChar(100)
-  status           String?  @db.VarChar(100)
-  pemegang         String?  @db.VarChar(255)
+  jenis            String?    @db.VarChar(100)
+  tahun            Int?       @db.SmallInt
+  nomor_permohonan String?    @db.VarChar(100)
+  // Teks bebas: hasil crawl disimpan apa adanya dari SINTA, IPRS manual diisi "Diterima".
+  status           String?    @db.VarChar(100)
+  pemegang         String?    @db.VarChar(255)
   inventor         String?
-  created_at       DateTime @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  sumber           SumberData @default(sinta)
+  created_at       DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
 
   iprs_dosen IprsDosen[]
 
@@ -219,17 +229,18 @@ model IprsDosen {
 }
 
 model Buku {
-  id            Int      @id @default(autoincrement())
-  kunci         String   @unique @db.Char(32)
+  id            Int        @id @default(autoincrement())
+  kunci         String     @unique @db.Char(32)
   judul         String
-  kategori      String?  @db.VarChar(100)
+  kategori      String?    @db.VarChar(100)
   penulis       String?
-  penerbit      String?  @db.VarChar(200)
-  tahun         Int?     @db.SmallInt
-  tempat_terbit String?  @db.VarChar(200)
-  isbn          String?  @db.VarChar(50)
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  penerbit      String?    @db.VarChar(200)
+  tahun         Int?       @db.SmallInt
+  tempat_terbit String?    @db.VarChar(200)
+  isbn          String?    @db.VarChar(50)
+  sumber        SumberData @default(sinta)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
 
   buku_dosen BukuDosen[]
 

@@ -2,8 +2,9 @@
 loader.py
 Crawl SINTA lalu simpan ke Postgres (Neon). Dipanggil dari FastAPI lewat sync_dosen(sinta_id).
 
-Memakai fungsi dari sinta.py, jadi file itu tidak diubah.
-Hanya meng-UPDATE baris dosen yang sudah ada (dibuat oleh Next.js saat login pertama).
+Memakai parser dari sinta.py.
+Hanya meng-UPDATE baris dosen yang sudah ada (dibuat oleh Next.js saat sinta_id diisi).
+Status IPRS disimpan apa adanya dari SINTA (hanya dirapikan spasinya). Kegiatan tidak punya status.
 """
 import hashlib
 import re
@@ -219,18 +220,17 @@ def simpan_kegiatan(cur, dosen_id, jenis, rows):
 
         cur.execute(
             """INSERT INTO kegiatan
-                 (kunci, jenis, judul, tahun, skema, dana_nominal, status, sumber_dana)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 (kunci, jenis, judul, tahun, skema, dana_nominal, sumber_dana)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (kunci) DO UPDATE SET
                  skema        = COALESCE(EXCLUDED.skema, kegiatan.skema),
                  dana_nominal = CASE WHEN EXCLUDED.dana_nominal > 0
                                      THEN EXCLUDED.dana_nominal ELSE kegiatan.dana_nominal END,
-                 status       = COALESCE(EXCLUDED.status, kegiatan.status),
                  sumber_dana  = COALESCE(EXCLUDED.sumber_dana, kegiatan.sumber_dana),
                  updated_at   = NOW()
                RETURNING id""",
             (k, jenis, judul, r.get("tahun"), nz(r.get("skema"), 255),
-             r.get("dana_nominal") or 0, nz(r.get("status"), 30), nz(r.get("sumber_dana"), 100)),
+             r.get("dana_nominal") or 0, nz(r.get("sumber_dana"), 100)),
         )
         kegiatan_id = cur.fetchone()["id"]
 

@@ -273,6 +273,23 @@ export type BoolWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedBoolFilter<$PrismaModel>
 }
 
+export type EnumSumberDataFilter<$PrismaModel = never> = {
+  equals?: $Enums.SumberData | Prisma.EnumSumberDataFieldRefInput<$PrismaModel>
+  in?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSumberDataFilter<$PrismaModel> | $Enums.SumberData
+}
+
+export type EnumSumberDataWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SumberData | Prisma.EnumSumberDataFieldRefInput<$PrismaModel>
+  in?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSumberDataWithAggregatesFilter<$PrismaModel> | $Enums.SumberData
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSumberDataFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSumberDataFilter<$PrismaModel>
+}
+
 export type EnumPublikasiSourceFilter<$PrismaModel = never> = {
   equals?: $Enums.PublikasiSource | Prisma.EnumPublikasiSourceFieldRefInput<$PrismaModel>
   in?: $Enums.PublikasiSource[] | Prisma.ListEnumPublikasiSourceFieldRefInput<$PrismaModel>
@@ -670,6 +687,23 @@ export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel>
   _min?: Prisma.NestedBoolFilter<$PrismaModel>
   _max?: Prisma.NestedBoolFilter<$PrismaModel>
+}
+
+export type NestedEnumSumberDataFilter<$PrismaModel = never> = {
+  equals?: $Enums.SumberData | Prisma.EnumSumberDataFieldRefInput<$PrismaModel>
+  in?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSumberDataFilter<$PrismaModel> | $Enums.SumberData
+}
+
+export type NestedEnumSumberDataWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.SumberData | Prisma.EnumSumberDataFieldRefInput<$PrismaModel>
+  in?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  notIn?: $Enums.SumberData[] | Prisma.ListEnumSumberDataFieldRefInput<$PrismaModel>
+  not?: Prisma.NestedEnumSumberDataWithAggregatesFilter<$PrismaModel> | $Enums.SumberData
+  _count?: Prisma.NestedIntFilter<$PrismaModel>
+  _min?: Prisma.NestedEnumSumberDataFilter<$PrismaModel>
+  _max?: Prisma.NestedEnumSumberDataFilter<$PrismaModel>
 }
 
 export type NestedEnumPublikasiSourceFilter<$PrismaModel = never> = {

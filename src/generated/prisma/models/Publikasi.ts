@@ -52,6 +52,7 @@ export type PublikasiMinAggregateOutputType = {
   penerbit: string | null
   doi: string | null
   akreditasi: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -70,6 +71,7 @@ export type PublikasiMaxAggregateOutputType = {
   penerbit: string | null
   doi: string | null
   akreditasi: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -88,6 +90,7 @@ export type PublikasiCountAggregateOutputType = {
   penerbit: number
   doi: number
   akreditasi: number
+  sumber: number
   created_at: number
   updated_at: number
   _all: number
@@ -120,6 +123,7 @@ export type PublikasiMinAggregateInputType = {
   penerbit?: true
   doi?: true
   akreditasi?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -138,6 +142,7 @@ export type PublikasiMaxAggregateInputType = {
   penerbit?: true
   doi?: true
   akreditasi?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -156,6 +161,7 @@ export type PublikasiCountAggregateInputType = {
   penerbit?: true
   doi?: true
   akreditasi?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
   _all?: true
@@ -261,6 +267,7 @@ export type PublikasiGroupByOutputType = {
   penerbit: string | null
   doi: string | null
   akreditasi: string | null
+  sumber: $Enums.SumberData
   created_at: Date
   updated_at: Date
   _count: PublikasiCountAggregateOutputType | null
@@ -302,6 +309,7 @@ export type PublikasiWhereInput = {
   penerbit?: Prisma.StringNullableFilter<"Publikasi"> | string | null
   doi?: Prisma.StringNullableFilter<"Publikasi"> | string | null
   akreditasi?: Prisma.StringNullableFilter<"Publikasi"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Publikasi"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Publikasi"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Publikasi"> | Date | string
   publikasi_dosen?: Prisma.PublikasiDosenListRelationFilter
@@ -321,6 +329,7 @@ export type PublikasiOrderByWithRelationInput = {
   penerbit?: Prisma.SortOrderInput | Prisma.SortOrder
   doi?: Prisma.SortOrderInput | Prisma.SortOrder
   akreditasi?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   publikasi_dosen?: Prisma.PublikasiDosenOrderByRelationAggregateInput
@@ -343,6 +352,7 @@ export type PublikasiWhereUniqueInput = Prisma.AtLeast<{
   penerbit?: Prisma.StringNullableFilter<"Publikasi"> | string | null
   doi?: Prisma.StringNullableFilter<"Publikasi"> | string | null
   akreditasi?: Prisma.StringNullableFilter<"Publikasi"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Publikasi"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Publikasi"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Publikasi"> | Date | string
   publikasi_dosen?: Prisma.PublikasiDosenListRelationFilter
@@ -362,6 +372,7 @@ export type PublikasiOrderByWithAggregationInput = {
   penerbit?: Prisma.SortOrderInput | Prisma.SortOrder
   doi?: Prisma.SortOrderInput | Prisma.SortOrder
   akreditasi?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   _count?: Prisma.PublikasiCountOrderByAggregateInput
@@ -388,6 +399,7 @@ export type PublikasiScalarWhereWithAggregatesInput = {
   penerbit?: Prisma.StringNullableWithAggregatesFilter<"Publikasi"> | string | null
   doi?: Prisma.StringNullableWithAggregatesFilter<"Publikasi"> | string | null
   akreditasi?: Prisma.StringNullableWithAggregatesFilter<"Publikasi"> | string | null
+  sumber?: Prisma.EnumSumberDataWithAggregatesFilter<"Publikasi"> | $Enums.SumberData
   created_at?: Prisma.DateTimeWithAggregatesFilter<"Publikasi"> | Date | string
   updated_at?: Prisma.DateTimeWithAggregatesFilter<"Publikasi"> | Date | string
 }
@@ -405,6 +417,7 @@ export type PublikasiCreateInput = {
   penerbit?: string | null
   doi?: string | null
   akreditasi?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   publikasi_dosen?: Prisma.PublikasiDosenCreateNestedManyWithoutPublikasiInput
@@ -424,6 +437,7 @@ export type PublikasiUncheckedCreateInput = {
   penerbit?: string | null
   doi?: string | null
   akreditasi?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   publikasi_dosen?: Prisma.PublikasiDosenUncheckedCreateNestedManyWithoutPublikasiInput
@@ -442,6 +456,7 @@ export type PublikasiUpdateInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   publikasi_dosen?: Prisma.PublikasiDosenUpdateManyWithoutPublikasiNestedInput
@@ -461,6 +476,7 @@ export type PublikasiUncheckedUpdateInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   publikasi_dosen?: Prisma.PublikasiDosenUncheckedUpdateManyWithoutPublikasiNestedInput
@@ -480,6 +496,7 @@ export type PublikasiCreateManyInput = {
   penerbit?: string | null
   doi?: string | null
   akreditasi?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -497,6 +514,7 @@ export type PublikasiUpdateManyMutationInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -515,6 +533,7 @@ export type PublikasiUncheckedUpdateManyInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -533,6 +552,7 @@ export type PublikasiCountOrderByAggregateInput = {
   penerbit?: Prisma.SortOrder
   doi?: Prisma.SortOrder
   akreditasi?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -557,6 +577,7 @@ export type PublikasiMaxOrderByAggregateInput = {
   penerbit?: Prisma.SortOrder
   doi?: Prisma.SortOrder
   akreditasi?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -575,6 +596,7 @@ export type PublikasiMinOrderByAggregateInput = {
   penerbit?: Prisma.SortOrder
   doi?: Prisma.SortOrder
   akreditasi?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -588,6 +610,10 @@ export type PublikasiSumOrderByAggregateInput = {
 export type PublikasiScalarRelationFilter = {
   is?: Prisma.PublikasiWhereInput
   isNot?: Prisma.PublikasiWhereInput
+}
+
+export type EnumSumberDataFieldUpdateOperationsInput = {
+  set?: $Enums.SumberData
 }
 
 export type PublikasiCreateNestedOneWithoutPublikasi_dosenInput = {
@@ -617,6 +643,7 @@ export type PublikasiCreateWithoutPublikasi_dosenInput = {
   penerbit?: string | null
   doi?: string | null
   akreditasi?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -635,6 +662,7 @@ export type PublikasiUncheckedCreateWithoutPublikasi_dosenInput = {
   penerbit?: string | null
   doi?: string | null
   akreditasi?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -668,6 +696,7 @@ export type PublikasiUpdateWithoutPublikasi_dosenInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -686,6 +715,7 @@ export type PublikasiUncheckedUpdateWithoutPublikasi_dosenInput = {
   penerbit?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   doi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   akreditasi?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -735,6 +765,7 @@ export type PublikasiSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   penerbit?: boolean
   doi?: boolean
   akreditasi?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
   publikasi_dosen?: boolean | Prisma.Publikasi$publikasi_dosenArgs<ExtArgs>
@@ -755,6 +786,7 @@ export type PublikasiSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   penerbit?: boolean
   doi?: boolean
   akreditasi?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["publikasi"]>
@@ -773,6 +805,7 @@ export type PublikasiSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   penerbit?: boolean
   doi?: boolean
   akreditasi?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["publikasi"]>
@@ -791,11 +824,12 @@ export type PublikasiSelectScalar = {
   penerbit?: boolean
   doi?: boolean
   akreditasi?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }
 
-export type PublikasiOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "judul_hash" | "judul" | "tahun" | "penulis" | "jurnal" | "sitasi" | "link" | "kuartil" | "jenis" | "penerbit" | "doi" | "akreditasi" | "created_at" | "updated_at", ExtArgs["result"]["publikasi"]>
+export type PublikasiOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "judul_hash" | "judul" | "tahun" | "penulis" | "jurnal" | "sitasi" | "link" | "kuartil" | "jenis" | "penerbit" | "doi" | "akreditasi" | "sumber" | "created_at" | "updated_at", ExtArgs["result"]["publikasi"]>
 export type PublikasiInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   publikasi_dosen?: boolean | Prisma.Publikasi$publikasi_dosenArgs<ExtArgs>
   _count?: boolean | Prisma.PublikasiCountOutputTypeDefaultArgs<ExtArgs>
@@ -822,6 +856,7 @@ export type $PublikasiPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     penerbit: string | null
     doi: string | null
     akreditasi: string | null
+    sumber: $Enums.SumberData
     created_at: Date
     updated_at: Date
   }, ExtArgs["result"]["publikasi"]>
@@ -1261,6 +1296,7 @@ export interface PublikasiFieldRefs {
   readonly penerbit: Prisma.FieldRef<"Publikasi", 'String'>
   readonly doi: Prisma.FieldRef<"Publikasi", 'String'>
   readonly akreditasi: Prisma.FieldRef<"Publikasi", 'String'>
+  readonly sumber: Prisma.FieldRef<"Publikasi", 'SumberData'>
   readonly created_at: Prisma.FieldRef<"Publikasi", 'DateTime'>
   readonly updated_at: Prisma.FieldRef<"Publikasi", 'DateTime'>
 }

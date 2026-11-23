@@ -46,6 +46,7 @@ export type IprsMinAggregateOutputType = {
   status: string | null
   pemegang: string | null
   inventor: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -60,6 +61,7 @@ export type IprsMaxAggregateOutputType = {
   status: string | null
   pemegang: string | null
   inventor: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -74,6 +76,7 @@ export type IprsCountAggregateOutputType = {
   status: number
   pemegang: number
   inventor: number
+  sumber: number
   created_at: number
   updated_at: number
   _all: number
@@ -100,6 +103,7 @@ export type IprsMinAggregateInputType = {
   status?: true
   pemegang?: true
   inventor?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -114,6 +118,7 @@ export type IprsMaxAggregateInputType = {
   status?: true
   pemegang?: true
   inventor?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -128,6 +133,7 @@ export type IprsCountAggregateInputType = {
   status?: true
   pemegang?: true
   inventor?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
   _all?: true
@@ -229,6 +235,7 @@ export type IprsGroupByOutputType = {
   status: string | null
   pemegang: string | null
   inventor: string | null
+  sumber: $Enums.SumberData
   created_at: Date
   updated_at: Date
   _count: IprsCountAggregateOutputType | null
@@ -266,6 +273,7 @@ export type IprsWhereInput = {
   status?: Prisma.StringNullableFilter<"Iprs"> | string | null
   pemegang?: Prisma.StringNullableFilter<"Iprs"> | string | null
   inventor?: Prisma.StringNullableFilter<"Iprs"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Iprs"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Iprs"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Iprs"> | Date | string
   iprs_dosen?: Prisma.IprsDosenListRelationFilter
@@ -281,6 +289,7 @@ export type IprsOrderByWithRelationInput = {
   status?: Prisma.SortOrderInput | Prisma.SortOrder
   pemegang?: Prisma.SortOrderInput | Prisma.SortOrder
   inventor?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   iprs_dosen?: Prisma.IprsDosenOrderByRelationAggregateInput
@@ -299,6 +308,7 @@ export type IprsWhereUniqueInput = Prisma.AtLeast<{
   status?: Prisma.StringNullableFilter<"Iprs"> | string | null
   pemegang?: Prisma.StringNullableFilter<"Iprs"> | string | null
   inventor?: Prisma.StringNullableFilter<"Iprs"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Iprs"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Iprs"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Iprs"> | Date | string
   iprs_dosen?: Prisma.IprsDosenListRelationFilter
@@ -314,6 +324,7 @@ export type IprsOrderByWithAggregationInput = {
   status?: Prisma.SortOrderInput | Prisma.SortOrder
   pemegang?: Prisma.SortOrderInput | Prisma.SortOrder
   inventor?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   _count?: Prisma.IprsCountOrderByAggregateInput
@@ -336,6 +347,7 @@ export type IprsScalarWhereWithAggregatesInput = {
   status?: Prisma.StringNullableWithAggregatesFilter<"Iprs"> | string | null
   pemegang?: Prisma.StringNullableWithAggregatesFilter<"Iprs"> | string | null
   inventor?: Prisma.StringNullableWithAggregatesFilter<"Iprs"> | string | null
+  sumber?: Prisma.EnumSumberDataWithAggregatesFilter<"Iprs"> | $Enums.SumberData
   created_at?: Prisma.DateTimeWithAggregatesFilter<"Iprs"> | Date | string
   updated_at?: Prisma.DateTimeWithAggregatesFilter<"Iprs"> | Date | string
 }
@@ -349,6 +361,7 @@ export type IprsCreateInput = {
   status?: string | null
   pemegang?: string | null
   inventor?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   iprs_dosen?: Prisma.IprsDosenCreateNestedManyWithoutIprsInput
@@ -364,6 +377,7 @@ export type IprsUncheckedCreateInput = {
   status?: string | null
   pemegang?: string | null
   inventor?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   iprs_dosen?: Prisma.IprsDosenUncheckedCreateNestedManyWithoutIprsInput
@@ -378,6 +392,7 @@ export type IprsUpdateInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   iprs_dosen?: Prisma.IprsDosenUpdateManyWithoutIprsNestedInput
@@ -393,6 +408,7 @@ export type IprsUncheckedUpdateInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   iprs_dosen?: Prisma.IprsDosenUncheckedUpdateManyWithoutIprsNestedInput
@@ -408,6 +424,7 @@ export type IprsCreateManyInput = {
   status?: string | null
   pemegang?: string | null
   inventor?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -421,6 +438,7 @@ export type IprsUpdateManyMutationInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -435,6 +453,7 @@ export type IprsUncheckedUpdateManyInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -449,6 +468,7 @@ export type IprsCountOrderByAggregateInput = {
   status?: Prisma.SortOrder
   pemegang?: Prisma.SortOrder
   inventor?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -468,6 +488,7 @@ export type IprsMaxOrderByAggregateInput = {
   status?: Prisma.SortOrder
   pemegang?: Prisma.SortOrder
   inventor?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -482,6 +503,7 @@ export type IprsMinOrderByAggregateInput = {
   status?: Prisma.SortOrder
   pemegang?: Prisma.SortOrder
   inventor?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -519,6 +541,7 @@ export type IprsCreateWithoutIprs_dosenInput = {
   status?: string | null
   pemegang?: string | null
   inventor?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -533,6 +556,7 @@ export type IprsUncheckedCreateWithoutIprs_dosenInput = {
   status?: string | null
   pemegang?: string | null
   inventor?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -562,6 +586,7 @@ export type IprsUpdateWithoutIprs_dosenInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -576,6 +601,7 @@ export type IprsUncheckedUpdateWithoutIprs_dosenInput = {
   status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pemegang?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   inventor?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -621,6 +647,7 @@ export type IprsSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   status?: boolean
   pemegang?: boolean
   inventor?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
   iprs_dosen?: boolean | Prisma.Iprs$iprs_dosenArgs<ExtArgs>
@@ -637,6 +664,7 @@ export type IprsSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   status?: boolean
   pemegang?: boolean
   inventor?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["iprs"]>
@@ -651,6 +679,7 @@ export type IprsSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   status?: boolean
   pemegang?: boolean
   inventor?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["iprs"]>
@@ -665,11 +694,12 @@ export type IprsSelectScalar = {
   status?: boolean
   pemegang?: boolean
   inventor?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }
 
-export type IprsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "judul" | "jenis" | "tahun" | "nomor_permohonan" | "status" | "pemegang" | "inventor" | "created_at" | "updated_at", ExtArgs["result"]["iprs"]>
+export type IprsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "judul" | "jenis" | "tahun" | "nomor_permohonan" | "status" | "pemegang" | "inventor" | "sumber" | "created_at" | "updated_at", ExtArgs["result"]["iprs"]>
 export type IprsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   iprs_dosen?: boolean | Prisma.Iprs$iprs_dosenArgs<ExtArgs>
   _count?: boolean | Prisma.IprsCountOutputTypeDefaultArgs<ExtArgs>
@@ -692,6 +722,7 @@ export type $IprsPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     status: string | null
     pemegang: string | null
     inventor: string | null
+    sumber: $Enums.SumberData
     created_at: Date
     updated_at: Date
   }, ExtArgs["result"]["iprs"]>
@@ -1127,6 +1158,7 @@ export interface IprsFieldRefs {
   readonly status: Prisma.FieldRef<"Iprs", 'String'>
   readonly pemegang: Prisma.FieldRef<"Iprs", 'String'>
   readonly inventor: Prisma.FieldRef<"Iprs", 'String'>
+  readonly sumber: Prisma.FieldRef<"Iprs", 'SumberData'>
   readonly created_at: Prisma.FieldRef<"Iprs", 'DateTime'>
   readonly updated_at: Prisma.FieldRef<"Iprs", 'DateTime'>
 }

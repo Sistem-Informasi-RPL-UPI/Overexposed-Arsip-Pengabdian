@@ -1869,6 +1869,7 @@ export const PublikasiScalarFieldEnum = {
   penerbit: 'penerbit',
   doi: 'doi',
   akreditasi: 'akreditasi',
+  sumber: 'sumber',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -1897,8 +1898,8 @@ export const KegiatanScalarFieldEnum = {
   tahun: 'tahun',
   skema: 'skema',
   dana_nominal: 'dana_nominal',
-  status: 'status',
   sumber_dana: 'sumber_dana',
+  sumber: 'sumber',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -1927,6 +1928,7 @@ export const IprsScalarFieldEnum = {
   status: 'status',
   pemegang: 'pemegang',
   inventor: 'inventor',
+  sumber: 'sumber',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -1952,6 +1954,7 @@ export const BukuScalarFieldEnum = {
   tahun: 'tahun',
   tempat_terbit: 'tempat_terbit',
   isbn: 'isbn',
+  sumber: 'sumber',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -2157,6 +2160,20 @@ export type ListDecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaMo
  * Reference to a field of type 'Boolean'
  */
 export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
+ * Reference to a field of type 'SumberData'
+ */
+export type EnumSumberDataFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SumberData'>
+    
+
+
+/**
+ * Reference to a field of type 'SumberData[]'
+ */
+export type ListEnumSumberDataFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SumberData[]'>
     
 
 

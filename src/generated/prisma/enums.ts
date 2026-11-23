@@ -23,10 +23,19 @@ export const PublikasiSource = {
   sinta_scopus: 'sinta_scopus',
   sinta_garuda: 'sinta_garuda',
   sinta_googlescholar: 'sinta_googlescholar',
-  sinta_rama: 'sinta_rama'
+  sinta_rama: 'sinta_rama',
+  manual: 'manual'
 } as const
 
 export type PublikasiSource = (typeof PublikasiSource)[keyof typeof PublikasiSource]
+
+
+export const SumberData = {
+  sinta: 'sinta',
+  manual: 'manual'
+} as const
+
+export type SumberData = (typeof SumberData)[keyof typeof SumberData]
 
 
 export const JenisKegiatan = {

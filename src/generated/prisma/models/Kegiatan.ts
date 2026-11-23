@@ -46,8 +46,8 @@ export type KegiatanMinAggregateOutputType = {
   tahun: number | null
   skema: string | null
   dana_nominal: runtime.Decimal | null
-  status: string | null
   sumber_dana: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -60,8 +60,8 @@ export type KegiatanMaxAggregateOutputType = {
   tahun: number | null
   skema: string | null
   dana_nominal: runtime.Decimal | null
-  status: string | null
   sumber_dana: string | null
+  sumber: $Enums.SumberData | null
   created_at: Date | null
   updated_at: Date | null
 }
@@ -74,8 +74,8 @@ export type KegiatanCountAggregateOutputType = {
   tahun: number
   skema: number
   dana_nominal: number
-  status: number
   sumber_dana: number
+  sumber: number
   created_at: number
   updated_at: number
   _all: number
@@ -102,8 +102,8 @@ export type KegiatanMinAggregateInputType = {
   tahun?: true
   skema?: true
   dana_nominal?: true
-  status?: true
   sumber_dana?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -116,8 +116,8 @@ export type KegiatanMaxAggregateInputType = {
   tahun?: true
   skema?: true
   dana_nominal?: true
-  status?: true
   sumber_dana?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
 }
@@ -130,8 +130,8 @@ export type KegiatanCountAggregateInputType = {
   tahun?: true
   skema?: true
   dana_nominal?: true
-  status?: true
   sumber_dana?: true
+  sumber?: true
   created_at?: true
   updated_at?: true
   _all?: true
@@ -231,8 +231,8 @@ export type KegiatanGroupByOutputType = {
   tahun: number | null
   skema: string | null
   dana_nominal: runtime.Decimal
-  status: string | null
   sumber_dana: string | null
+  sumber: $Enums.SumberData
   created_at: Date
   updated_at: Date
   _count: KegiatanCountAggregateOutputType | null
@@ -268,8 +268,8 @@ export type KegiatanWhereInput = {
   tahun?: Prisma.IntNullableFilter<"Kegiatan"> | number | null
   skema?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
   dana_nominal?: Prisma.DecimalFilter<"Kegiatan"> | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
   sumber_dana?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Kegiatan"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Kegiatan"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Kegiatan"> | Date | string
   anggota?: Prisma.KegiatanAnggotaListRelationFilter
@@ -283,8 +283,8 @@ export type KegiatanOrderByWithRelationInput = {
   tahun?: Prisma.SortOrderInput | Prisma.SortOrder
   skema?: Prisma.SortOrderInput | Prisma.SortOrder
   dana_nominal?: Prisma.SortOrder
-  status?: Prisma.SortOrderInput | Prisma.SortOrder
   sumber_dana?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   anggota?: Prisma.KegiatanAnggotaOrderByRelationAggregateInput
@@ -301,8 +301,8 @@ export type KegiatanWhereUniqueInput = Prisma.AtLeast<{
   tahun?: Prisma.IntNullableFilter<"Kegiatan"> | number | null
   skema?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
   dana_nominal?: Prisma.DecimalFilter<"Kegiatan"> | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
   sumber_dana?: Prisma.StringNullableFilter<"Kegiatan"> | string | null
+  sumber?: Prisma.EnumSumberDataFilter<"Kegiatan"> | $Enums.SumberData
   created_at?: Prisma.DateTimeFilter<"Kegiatan"> | Date | string
   updated_at?: Prisma.DateTimeFilter<"Kegiatan"> | Date | string
   anggota?: Prisma.KegiatanAnggotaListRelationFilter
@@ -316,8 +316,8 @@ export type KegiatanOrderByWithAggregationInput = {
   tahun?: Prisma.SortOrderInput | Prisma.SortOrder
   skema?: Prisma.SortOrderInput | Prisma.SortOrder
   dana_nominal?: Prisma.SortOrder
-  status?: Prisma.SortOrderInput | Prisma.SortOrder
   sumber_dana?: Prisma.SortOrderInput | Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
   _count?: Prisma.KegiatanCountOrderByAggregateInput
@@ -338,8 +338,8 @@ export type KegiatanScalarWhereWithAggregatesInput = {
   tahun?: Prisma.IntNullableWithAggregatesFilter<"Kegiatan"> | number | null
   skema?: Prisma.StringNullableWithAggregatesFilter<"Kegiatan"> | string | null
   dana_nominal?: Prisma.DecimalWithAggregatesFilter<"Kegiatan"> | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.StringNullableWithAggregatesFilter<"Kegiatan"> | string | null
   sumber_dana?: Prisma.StringNullableWithAggregatesFilter<"Kegiatan"> | string | null
+  sumber?: Prisma.EnumSumberDataWithAggregatesFilter<"Kegiatan"> | $Enums.SumberData
   created_at?: Prisma.DateTimeWithAggregatesFilter<"Kegiatan"> | Date | string
   updated_at?: Prisma.DateTimeWithAggregatesFilter<"Kegiatan"> | Date | string
 }
@@ -351,8 +351,8 @@ export type KegiatanCreateInput = {
   tahun?: number | null
   skema?: string | null
   dana_nominal?: runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: string | null
   sumber_dana?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   anggota?: Prisma.KegiatanAnggotaCreateNestedManyWithoutKegiatanInput
@@ -366,8 +366,8 @@ export type KegiatanUncheckedCreateInput = {
   tahun?: number | null
   skema?: string | null
   dana_nominal?: runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: string | null
   sumber_dana?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
   anggota?: Prisma.KegiatanAnggotaUncheckedCreateNestedManyWithoutKegiatanInput
@@ -380,8 +380,8 @@ export type KegiatanUpdateInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   anggota?: Prisma.KegiatanAnggotaUpdateManyWithoutKegiatanNestedInput
@@ -395,8 +395,8 @@ export type KegiatanUncheckedUpdateInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   anggota?: Prisma.KegiatanAnggotaUncheckedUpdateManyWithoutKegiatanNestedInput
@@ -410,8 +410,8 @@ export type KegiatanCreateManyInput = {
   tahun?: number | null
   skema?: string | null
   dana_nominal?: runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: string | null
   sumber_dana?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -423,8 +423,8 @@ export type KegiatanUpdateManyMutationInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -437,8 +437,8 @@ export type KegiatanUncheckedUpdateManyInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -451,8 +451,8 @@ export type KegiatanCountOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   skema?: Prisma.SortOrder
   dana_nominal?: Prisma.SortOrder
-  status?: Prisma.SortOrder
   sumber_dana?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -471,8 +471,8 @@ export type KegiatanMaxOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   skema?: Prisma.SortOrder
   dana_nominal?: Prisma.SortOrder
-  status?: Prisma.SortOrder
   sumber_dana?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -485,8 +485,8 @@ export type KegiatanMinOrderByAggregateInput = {
   tahun?: Prisma.SortOrder
   skema?: Prisma.SortOrder
   dana_nominal?: Prisma.SortOrder
-  status?: Prisma.SortOrder
   sumber_dana?: Prisma.SortOrder
+  sumber?: Prisma.SortOrder
   created_at?: Prisma.SortOrder
   updated_at?: Prisma.SortOrder
 }
@@ -527,8 +527,8 @@ export type KegiatanCreateWithoutAnggotaInput = {
   tahun?: number | null
   skema?: string | null
   dana_nominal?: runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: string | null
   sumber_dana?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -541,8 +541,8 @@ export type KegiatanUncheckedCreateWithoutAnggotaInput = {
   tahun?: number | null
   skema?: string | null
   dana_nominal?: runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: string | null
   sumber_dana?: string | null
+  sumber?: $Enums.SumberData
   created_at?: Date | string
   updated_at?: Date | string
 }
@@ -570,8 +570,8 @@ export type KegiatanUpdateWithoutAnggotaInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -584,8 +584,8 @@ export type KegiatanUncheckedUpdateWithoutAnggotaInput = {
   tahun?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   skema?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   dana_nominal?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
-  status?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sumber_dana?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sumber?: Prisma.EnumSumberDataFieldUpdateOperationsInput | $Enums.SumberData
   created_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updated_at?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -629,8 +629,8 @@ export type KegiatanSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   tahun?: boolean
   skema?: boolean
   dana_nominal?: boolean
-  status?: boolean
   sumber_dana?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
   anggota?: boolean | Prisma.Kegiatan$anggotaArgs<ExtArgs>
@@ -645,8 +645,8 @@ export type KegiatanSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   tahun?: boolean
   skema?: boolean
   dana_nominal?: boolean
-  status?: boolean
   sumber_dana?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["kegiatan"]>
@@ -659,8 +659,8 @@ export type KegiatanSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   tahun?: boolean
   skema?: boolean
   dana_nominal?: boolean
-  status?: boolean
   sumber_dana?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }, ExtArgs["result"]["kegiatan"]>
@@ -673,13 +673,13 @@ export type KegiatanSelectScalar = {
   tahun?: boolean
   skema?: boolean
   dana_nominal?: boolean
-  status?: boolean
   sumber_dana?: boolean
+  sumber?: boolean
   created_at?: boolean
   updated_at?: boolean
 }
 
-export type KegiatanOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "jenis" | "judul" | "tahun" | "skema" | "dana_nominal" | "status" | "sumber_dana" | "created_at" | "updated_at", ExtArgs["result"]["kegiatan"]>
+export type KegiatanOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "kunci" | "jenis" | "judul" | "tahun" | "skema" | "dana_nominal" | "sumber_dana" | "sumber" | "created_at" | "updated_at", ExtArgs["result"]["kegiatan"]>
 export type KegiatanInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   anggota?: boolean | Prisma.Kegiatan$anggotaArgs<ExtArgs>
   _count?: boolean | Prisma.KegiatanCountOutputTypeDefaultArgs<ExtArgs>
@@ -700,8 +700,8 @@ export type $KegiatanPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     tahun: number | null
     skema: string | null
     dana_nominal: runtime.Decimal
-    status: string | null
     sumber_dana: string | null
+    sumber: $Enums.SumberData
     created_at: Date
     updated_at: Date
   }, ExtArgs["result"]["kegiatan"]>
@@ -1135,8 +1135,8 @@ export interface KegiatanFieldRefs {
   readonly tahun: Prisma.FieldRef<"Kegiatan", 'Int'>
   readonly skema: Prisma.FieldRef<"Kegiatan", 'String'>
   readonly dana_nominal: Prisma.FieldRef<"Kegiatan", 'Decimal'>
-  readonly status: Prisma.FieldRef<"Kegiatan", 'String'>
   readonly sumber_dana: Prisma.FieldRef<"Kegiatan", 'String'>
+  readonly sumber: Prisma.FieldRef<"Kegiatan", 'SumberData'>
   readonly created_at: Prisma.FieldRef<"Kegiatan", 'DateTime'>
   readonly updated_at: Prisma.FieldRef<"Kegiatan", 'DateTime'>
 }

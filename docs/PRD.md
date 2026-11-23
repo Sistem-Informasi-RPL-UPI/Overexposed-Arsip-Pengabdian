@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.21. Berdasarkan ERD versi 6.
+Versi: 1.22. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,6 +28,7 @@ Versi: 1.21. Berdasarkan ERD versi 6.
 | 1.19  | 2026-11-22 | Usulan di 5.7 disetujui menjadi keputusan: aturan hapus saat ada dosen lain yang tertaut, penolakan kegiatan manual untuk dosen yang belum pernah sinkron, dan bentuk form kegiatan (`peran_saya`, `ketua`, `anggota_lain`). Keputusan terbuka 18 ditutup: `publikasi_dosen.source` untuk data manual bernilai `manual`.                                                                                                                                                                                                               |
 | 1.20  | 2026-11-23 | Data manual yang duplikat dengan data `sumber = manual` milik dosen lain kini **otomatis ditautkan** (balas `200`, `ditautkan = true`), tanpa tombol "Tautkan ke saya" dan tanpa endpoint `tautkan` (5.7, 8.2). Duplikat dengan data SINTA tetap `409`. Form kegiatan memakai satu kolom `tim`: nama pertama `ketua`, berikutnya `anggota` (5.7). `kuartil` dan `akreditasi` publikasi manual opsional (5.7). Penegasan baca data per dosen lewat filter `dosen_id` (5.8). Enum `PublikasiSource` perlu nilai `manual`.                |
 | 1.21  | 2026-11-23 | Daftar endpoint baca data tridarma ditetapkan (5.9): `GET /api/tridarma/{dosen,publikasi,kegiatan,iprs,buku}` dan detail `[id]`, data satu dosen lewat query `dosen_id` (bukan path), `kegiatan` satu route dengan `jenis`. Default dosen yang login diatur front-end (8.2). Semua perubahan skema modul 7 (hapus `kegiatan.status`, kolom `sumber`, nilai `manual` di enum `PublikasiSource`) dipusatkan dalam satu migrasi di issue pertama (5.3, 14). Tidak ada perubahan skema untuk kolom `tim` kegiatan: hanya field form (5.7). |
+| 1.22  | 2026-11-23 | Migrasi skema modul 7 dibuat (issue #12, 5.3): enum `SumberData` (`sinta`, `manual`) untuk kolom `sumber`, nilai `manual` di `PublikasiSource`, `kegiatan.status` dihapus. Crawler tidak lagi membaca atau menulis status kegiatan. Konstanta `STATUS_IPRS_MANUAL` di `src/lib/tridarma.ts`. |
 
 ---
 
@@ -133,7 +134,7 @@ Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, me
 - **Jeda.** 1,5 detik antar tab ke SINTA (keputusan 2026-11-22, lihat 12 nomor 8) dan jeda acak antar dosen.
 - **Sumber data (keputusan 2026-11-22).** Setiap tabel data tridarma (`publikasi`, `kegiatan`, `iprs`, `buku`) punya kolom `sumber` dengan nilai `sinta` atau `manual`. Crawl hanya menulis dan memperbarui baris `sumber = sinta`. Crawl **tidak pernah mengubah atau menghapus** baris `sumber = manual`.
 - **Data manual yang kemudian ditemukan crawl (keputusan 2026-11-22).** Karena `kunci` unik, tidak mungkin ada dua baris untuk data yang sama. Bila crawl menemukan data dengan kunci yang sudah ada sebagai baris manual, baris itu **digabung menjadi satu**: kolom yang masih kosong diisi dari SINTA, `sumber` berubah menjadi `sinta`, dan sesudahnya baris itu mengikuti aturan SINTA (tidak bisa diubah atau dihapus lewat CRUD).
-- **Perubahan skema dipusatkan (keputusan 2026-11-23).** Semua perubahan skema modul 7 dikerjakan dalam satu migrasi Prisma di issue pertama: hapus `kegiatan.status`, tambah kolom `sumber` di `publikasi`, `kegiatan`, `iprs`, dan `buku`, dan tambah nilai `manual` di enum `PublikasiSource`. Issue lain memakai hasil migrasi itu dan tidak mengubah skema.
+- **Perubahan skema dipusatkan (keputusan 2026-11-23).** Semua perubahan skema modul 7 dikerjakan dalam satu migrasi Prisma di issue pertama: hapus `kegiatan.status`, tambah kolom `sumber` di `publikasi`, `kegiatan`, `iprs`, dan `buku`, dan tambah nilai `manual` di enum `PublikasiSource`. Issue lain memakai hasil migrasi itu dan tidak mengubah skema. Migrasinya `20261123090000_modul7_sumber_status_enum` (issue #12): kolom `sumber` bertipe enum `SumberData` (`sinta`, `manual`) dengan bawaan `sinta`, sehingga baris lama otomatis `sinta` dan crawler tidak perlu menulis kolom ini. Status kegiatan lama ikut terhapus.
 - **Status hanya di IPRS (keputusan 2026-11-22).** Kolom `status` hanya ada di tabel `iprs`. Tabel `kegiatan` (penelitian dan pengabdian) **tidak punya kolom status**, dan crawler tidak lagi mengambil atau menyimpan status kegiatan dari SINTA. Untuk `iprs`: baris `sumber = sinta` menyimpan status apa adanya dari SINTA dan diperbarui tiap crawl, baris `sumber = manual` berstatus `Diterima` (5.7). Status SINTA disimpan apa adanya, tanpa dipetakan: bila SINTA menulis `Granted`, yang tersimpan `Granted`, bila `Diterima`, yang tersimpan `Diterima`. Tidak ada validasi oleh Kaprodi atau peran lain untuk data modul 7.
 
 ### 5.4 Pengajaran (bidang tridarma ketiga)
@@ -543,6 +544,7 @@ sacibiru-modul/
 │  │  ├─ arsip.ts                 (validasi dan query arsip)
 │  │  ├─ kategori.ts              (validasi dan query kategori)
 │  │  ├─ dashboard.ts             (query dashboard arsip)
+│  │  ├─ tridarma.ts              (konstanta modul 7: STATUS_IPRS_MANUAL, SUMBER_SINTA, SUMBER_MANUAL)
 │  │  ├─ rbac.ts
 │  │  └─ crawler-client.ts
 │  └─ proxy.ts                        (Next.js 16 Proxy: refresh sesi & RBAC rute)
@@ -553,7 +555,8 @@ sacibiru-modul/
 │  │  ├─ loader.py
 │  │  └─ config.py
 │  ├─ tests/
-│  │  └─ test_norm_nama.py        (unittest)
+│  │  ├─ test_norm_nama.py        (unittest)
+│  │  └─ test_kegiatan_iprs.py    (parser dan loader kegiatan/IPRS; tes integrasi opsional lewat CRAWLER_TEST_DATABASE_URL)
 │  ├─ requirements.txt
 │  ├─ Dockerfile
 │  └─ .env.example

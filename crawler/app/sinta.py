@@ -314,7 +314,6 @@ def parse_researches_services(it):
     skema = ""
     dana = ""
     dana_nominal = 0
-    status = ""
     sumber_dana = ""
 
     pub_el = it.select_one("a.ar-pub")
@@ -329,8 +328,7 @@ def parse_researches_services(it):
             dana = t
             digits = re.sub(r"[^\d]", "", t)
             dana_nominal = int(digits) if digits else 0
-        elif t in ["Approved", "Rejected", "Draft"]:
-            status = t
+        # Teks persetujuan (Approved, Rejected, Draft) sengaja diabaikan, kegiatan tidak menyimpannya (PRD 5.3).
         elif "source" in t.lower():
             sumber_dana = t
 
@@ -352,7 +350,6 @@ def parse_researches_services(it):
         "tahun": int(m_y.group()) if m_y else None,
         "dana": dana,
         "dana_nominal": dana_nominal,
-        "status": status,
         "sumber_dana": sumber_dana,
         "raw": clean(it.get_text(" ", strip=True)),
     }
