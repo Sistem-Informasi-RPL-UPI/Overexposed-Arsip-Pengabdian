@@ -1,0 +1,258 @@
+{
+  "_catatan": "Dibuat dari crawler/app/loader.py. Dipakai tests/lib/kunci.test.ts dan crawler/tests/test_kunci.py.",
+  "publikasi": [
+    {
+      "kasus": "dasar",
+      "judul": "Sistem Informasi Arsip Digital",
+      "kunci": "63483cdce2a8be2d4e800e3eb1c74adb"
+    },
+    {
+      "kasus": "huruf besar-kecil berbeda",
+      "judul": "SISTEM informasi ARSIP digital",
+      "kunci": "63483cdce2a8be2d4e800e3eb1c74adb"
+    },
+    {
+      "kasus": "tanda baca berbeda",
+      "judul": "Sistem-Informasi: Arsip, Digital!",
+      "kunci": "63483cdce2a8be2d4e800e3eb1c74adb"
+    },
+    {
+      "kasus": "spasi ganda dan spasi tepi",
+      "judul": "  Sistem   Informasi  Arsip\tDigital ",
+      "kunci": "63483cdce2a8be2d4e800e3eb1c74adb"
+    },
+    {
+      "kasus": "non-ASCII dengan aksen",
+      "judul": "Análisis de Datos Académicos",
+      "kunci": "d972776d38cd53aad63beb8a887367a7"
+    },
+    {
+      "kasus": "non-ASCII aksen terurai (NFD)",
+      "judul": "Análisis de Datos Académicos",
+      "kunci": "53c942ef285890c3af5fa0a5f4956671"
+    },
+    {
+      "kasus": "non-ASCII aksara non-Latin",
+      "judul": "データ分析 untuk Prodi",
+      "kunci": "71a15cc293ae5b351bfccab62c9d53e0"
+    },
+    {
+      "kasus": "garis bawah dibuang",
+      "judul": "Sistem_Informasi Arsip_Digital",
+      "kunci": "63483cdce2a8be2d4e800e3eb1c74adb"
+    },
+    {
+      "kasus": "judul kosong",
+      "judul": "",
+      "kunci": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ],
+  "kegiatan": [
+    {
+      "kasus": "dasar",
+      "jenis": "penelitian",
+      "judul": "Pengembangan Model Pembelajaran",
+      "tahun": 2023,
+      "kunci": "1f4ef973a5c3826fad058ca53e87d53e"
+    },
+    {
+      "kasus": "huruf besar-kecil dan tanda baca berbeda",
+      "jenis": "penelitian",
+      "judul": "PENGEMBANGAN model, pembelajaran.",
+      "tahun": 2023,
+      "kunci": "1f4ef973a5c3826fad058ca53e87d53e"
+    },
+    {
+      "kasus": "tahun sebagai teks",
+      "jenis": "penelitian",
+      "judul": "Pengembangan Model Pembelajaran",
+      "tahun": "2023",
+      "kunci": "1f4ef973a5c3826fad058ca53e87d53e"
+    },
+    {
+      "kasus": "jenis berbeda",
+      "jenis": "pengabdian",
+      "judul": "Pengembangan Model Pembelajaran",
+      "tahun": 2023,
+      "kunci": "7efaf7105f3005c2022c8d9703df1cdd"
+    },
+    {
+      "kasus": "tahun kosong",
+      "jenis": "pengabdian",
+      "judul": "Pelatihan Guru",
+      "tahun": null,
+      "kunci": "21d3f2b22f078734f7adf46ff1dd002b"
+    },
+    {
+      "kasus": "non-ASCII",
+      "jenis": "pengabdian",
+      "judul": "Pelatihan Guru di Café Ñandú",
+      "tahun": 2022,
+      "kunci": "35e426ce08c04f320ada90e3b559102a"
+    }
+  ],
+  "iprs": [
+    {
+      "kasus": "nomor permohonan dipakai",
+      "nomor_permohonan": "EC00202312345",
+      "judul": "Aplikasi Arsip",
+      "tahun": 2023,
+      "kunci": "86133237396f44c9c5b9b92d71a2e195"
+    },
+    {
+      "kasus": "nomor permohonan sama, judul lain",
+      "nomor_permohonan": "EC00202312345",
+      "judul": "Judul Berbeda Sama Sekali",
+      "tahun": 2020,
+      "kunci": "86133237396f44c9c5b9b92d71a2e195"
+    },
+    {
+      "kasus": "nomor permohonan beda huruf dan tanda baca",
+      "nomor_permohonan": "ec-0020-2312345",
+      "judul": "Aplikasi Arsip",
+      "tahun": 2023,
+      "kunci": "86133237396f44c9c5b9b92d71a2e195"
+    },
+    {
+      "kasus": "nomor permohonan kosong",
+      "nomor_permohonan": "",
+      "judul": "Aplikasi Arsip",
+      "tahun": 2023,
+      "kunci": "fc4dc69ab63155f8cb6444b5a8351fd6"
+    },
+    {
+      "kasus": "nomor permohonan hanya spasi",
+      "nomor_permohonan": "   ",
+      "judul": "Aplikasi Arsip",
+      "tahun": 2023,
+      "kunci": "fc4dc69ab63155f8cb6444b5a8351fd6"
+    },
+    {
+      "kasus": "nomor permohonan null",
+      "nomor_permohonan": null,
+      "judul": "APLIKASI  arsip!",
+      "tahun": 2023,
+      "kunci": "fc4dc69ab63155f8cb6444b5a8351fd6"
+    },
+    {
+      "kasus": "nomor permohonan kosong, non-ASCII",
+      "nomor_permohonan": null,
+      "judul": "Aplikasi Ärsip Ünik",
+      "tahun": 2024,
+      "kunci": "50b9100d405d1b9c63571144485103eb"
+    },
+    {
+      "kasus": "nomor permohonan lebih dari 100 karakter dipotong",
+      "nomor_permohonan": "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNEKOR",
+      "judul": "x",
+      "tahun": 2023,
+      "kunci": "c9594d15f717b6e0fb9f1c3b1ea31e7c"
+    }
+  ],
+  "buku": [
+    {
+      "kasus": "ISBN dipakai",
+      "isbn": "978-602-1234-56-7",
+      "judul": "Pemrograman Web",
+      "tahun": 2021,
+      "kunci": "d7b59bd6a68225edc5b9798c1f211012"
+    },
+    {
+      "kasus": "ISBN tanpa tanda hubung",
+      "isbn": "9786021234567",
+      "judul": "Judul Lain",
+      "tahun": 2019,
+      "kunci": "d7b59bd6a68225edc5b9798c1f211012"
+    },
+    {
+      "kasus": "ISBN kosong",
+      "isbn": "",
+      "judul": "Pemrograman Web",
+      "tahun": 2021,
+      "kunci": "19e94ff4a5180b7362f4bc0c73ea790c"
+    },
+    {
+      "kasus": "ISBN null, huruf dan spasi berbeda",
+      "isbn": null,
+      "judul": "  PEMROGRAMAN   web ",
+      "tahun": 2021,
+      "kunci": "19e94ff4a5180b7362f4bc0c73ea790c"
+    },
+    {
+      "kasus": "ISBN kosong, non-ASCII",
+      "isbn": null,
+      "judul": "Ilmu Komputer: Teori & Práctica",
+      "tahun": 2020,
+      "kunci": "4dcdeb933ae2eed766f23302e4b41b36"
+    },
+    {
+      "kasus": "ISBN lebih dari 50 karakter dipotong",
+      "isbn": "99999999999999999999999999999999999999999999999999123",
+      "judul": "x",
+      "tahun": 2021,
+      "kunci": "219a56353087c146633e7a37375c8fa5"
+    }
+  ],
+  "norm_nama": [
+    {
+      "kasus": "gelar di depan",
+      "nama": "Dr. Mochamad Iqbal Ardimansyah",
+      "hasil": "mochamad iqbal ardimansyah"
+    },
+    {
+      "kasus": "gelar depan bertumpuk",
+      "nama": "Prof. Dr. Ir. H. Ahmad Fauzi",
+      "hasil": "ahmad fauzi"
+    },
+    {
+      "kasus": "gelar di belakang",
+      "nama": "Budi Santoso, S.Kom., M.T.",
+      "hasil": "budi santoso"
+    },
+    {
+      "kasus": "gelar belakang tanpa koma",
+      "nama": "Budi Santoso S.Pd.I M.Si.",
+      "hasil": "budi santoso"
+    },
+    {
+      "kasus": "gelar di depan dan belakang",
+      "nama": "Dr. Mochamad Iqbal Ardimansyah, S.Kom., M.T.",
+      "hasil": "mochamad iqbal ardimansyah"
+    },
+    {
+      "kasus": "format Nama, Nama",
+      "nama": "Siregar, Budi",
+      "hasil": "siregar budi"
+    },
+    {
+      "kasus": "format Nama, Nama dengan gelar",
+      "nama": "Siregar, Budi, S.T., M.Sc.",
+      "hasil": "siregar budi"
+    },
+    {
+      "kasus": "huruf besar-kecil berbeda",
+      "nama": "MOCHAMAD iqbal ARDIMANSYAH",
+      "hasil": "mochamad iqbal ardimansyah"
+    },
+    {
+      "kasus": "inisial di depan bukan gelar",
+      "nama": "M.Iqbal Ardi, S.Kom.",
+      "hasil": "m iqbal ardi"
+    },
+    {
+      "kasus": "aksen dan spasi",
+      "nama": "  José   Müller  ",
+      "hasil": "jose muller"
+    },
+    {
+      "kasus": "Ph.D tanpa titik akhir",
+      "nama": "Siti Aminah Ph.D",
+      "hasil": "siti aminah"
+    },
+    {
+      "kasus": "kosong",
+      "nama": "",
+      "hasil": ""
+    }
+  ]
+}

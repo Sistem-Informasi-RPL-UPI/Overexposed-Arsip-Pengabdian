@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.26. Berdasarkan ERD versi 6.
+Versi: 1.27. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,6 +33,7 @@ Versi: 1.26. Berdasarkan ERD versi 6.
 | 1.24  | 2026-11-23 | Data `sumber = sinta` boleh diubah dan dihapus lewat CRUD oleh dosen yang tertaut (5.7). Aturan hapus berlaku untuk semua sumber: bila masih ada dosen lain yang tertaut, hanya tautan pengguna yang dilepas. `bisa_diubah` (5.9) dan tombol ubah/hapus (8.2) tidak lagi terbatas pada data manual. ACC/validasi data dosen lain dihapus dari RBAC modul 7, dan Staff Kaprodi ikut boleh mengubah data milik sendiri sesuai 5.6. Keputusan terbuka 19 dan 20 ditambahkan. |
 | 1.25  | 2026-11-23 | Keputusan terbuka 19 ditutup: data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`. Keputusan 20 ditutup: data SINTA yang dihapus boleh muncul lagi saat crawl. Keputusan terbuka 21 ditambahkan (perlindungan isian dosen hanya bertahan satu kali crawl karena aturan gabung 5.3). |
 | 1.26  | 2026-11-23 | Keputusan 21 ditutup dengan pilihan (b): baris `manual` tetap `manual` saat ditemukan crawl, jadi crawl selalu hanya mengisi kolom kosong (5.3, 8). Keputusan 16 diubah sesuai itu. Loader tidak lagi mengubah `sumber` saat `ON CONFLICT`. |
+| 1.27  | 2026-11-23 | Fungsi kunci anti-dobel dan normalisasi nama di Next.js (issue #14, 5.3): `src/lib/kunci.ts` (`normTeks`, `kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`), port dari `loader.py` tanpa aturan baru. Aturan kunci per tabel di `loader.py` dipindah ke fungsi `kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku` (hasil tidak berubah). Fixture bersama `crawler/tests/fixtures/kunci.json` dipakai Vitest dan `unittest`. |
 
 ---
 
@@ -126,6 +127,8 @@ Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, me
 ### 5.3 Aturan pemrosesan data (sudah ditetapkan)
 
 - **Anti-dobel.** Kunci dibuat dari teks yang dinormalisasi (huruf kecil, tanpa tanda baca), lalu di-hash md5. `publikasi.judul_hash = md5(norm(judul))`. `kegiatan.kunci = md5(jenis | judul | tahun)`. `iprs.kunci` dari nomor permohonan, atau judul dan tahun bila kosong. `buku.kunci` dari ISBN, atau judul dan tahun bila kosong. Kunci yang sama dipakai untuk data manual (5.7).
+  - Penerapan (issue #14): Python di `crawler/app/loader.py` (`kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku`, `norm_nama`) menjadi acuan, dan `src/lib/kunci.ts` adalah padanannya untuk Next.js (`kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`). Nomor permohonan dipotong 100 karakter dan ISBN 50 karakter sebelum di-hash, sesuai panjang kolom. Keduanya dicek terhadap fixture yang sama, `crawler/tests/fixtures/kunci.json`. Mengubah aturan di satu sisi wajib diikuti sisi lain dan fixture.
+  - Catatan perilaku: `norm` kunci tidak membuang aksen, jadi "Análisis" dan "Análisis" (aksen terurai/NFD) menghasilkan kunci berbeda. Ini perilaku lama yang dipertahankan supaya `judul_hash` lama tetap cocok. `normNama` membuang aksen, sama dengan `norm_nama`.
 - **Upsert.** Crawl ulang tidak menambah baris ganda, hanya memperbarui.
 - **Publikasi.** `sitasi` memakai nilai tertinggi (`GREATEST`). Kolom lain diisi hanya bila masih kosong (`COALESCE`).
 - **Urutan sumber saat simpan:** Scopus, Garuda, Google Scholar SINTA, RAMA. Nilai `publikasi_dosen.source`: `sinta_scopus`, `sinta_garuda`, `sinta_googlescholar`, `sinta_rama`.
@@ -554,6 +557,7 @@ sacibiru-modul/
 │  │  ├─ kategori.ts              (validasi dan query kategori)
 │  │  ├─ dashboard.ts             (query dashboard arsip)
 │  │  ├─ tridarma.ts              (konstanta modul 7: STATUS_IPRS_MANUAL, SUMBER_SINTA, SUMBER_MANUAL)
+│  │  ├─ kunci.ts                 (kunci anti-dobel dan normNama, padanan loader.py)
 │  │  ├─ rbac.ts
 │  │  └─ crawler-client.ts
 │  └─ proxy.ts                        (Next.js 16 Proxy: refresh sesi & RBAC rute)
@@ -566,13 +570,15 @@ sacibiru-modul/
 │  ├─ tests/
 │  │  ├─ test_norm_nama.py        (unittest)
 │  │  ├─ test_kegiatan_iprs.py    (parser dan loader kegiatan/IPRS; tes integrasi opsional lewat CRAWLER_TEST_DATABASE_URL)
-│  │  └─ test_gabung_manual.py    (penggabungan baris manual oleh crawl; tes integrasi opsional, selalu di-rollback)
+│  │  ├─ test_gabung_manual.py    (penggabungan baris manual oleh crawl; tes integrasi opsional, selalu di-rollback)
+│  │  ├─ test_kunci.py            (kunci anti-dobel dan norm_nama terhadap fixture bersama)
+│  │  └─ fixtures/kunci.json      (masukan dan kunci yang diharapkan, dibaca juga oleh tests/lib/kunci.test.ts)
 │  ├─ requirements.txt
 │  ├─ Dockerfile
 │  └─ .env.example
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
 │  ├─ helpers/fixtures.ts
-│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip)
+│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci)
 │  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas: handler dengan database tiruan)
 │  └─ proxy.test.ts               (penyegaran sesi dan dosen_id)
 ├─ vitest.config.ts

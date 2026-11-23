@@ -39,6 +39,25 @@ def kunci(*bagian):
     return hashlib.md5("|".join(norm(b) for b in bagian).encode("utf-8")).hexdigest()
 
 
+# Padanannya ada di src/lib/kunci.ts. Hasil keduanya dicek terhadap tests/fixtures/kunci.json.
+def kunci_publikasi(judul):
+    return kunci(nz(judul))
+
+
+def kunci_kegiatan(jenis, judul, tahun):
+    return kunci(jenis, nz(judul), tahun)
+
+
+def kunci_iprs(nomor_permohonan, judul, tahun):
+    nomor = nz(nomor_permohonan, 100)
+    return kunci(nomor) if nomor else kunci(nz(judul), tahun)
+
+
+def kunci_buku(isbn, judul, tahun):
+    nomor = nz(isbn, 50)
+    return kunci(nomor) if nomor else kunci(nz(judul), tahun)
+
+
 GELAR_DEPAN = {"prof", "dr", "drs", "dra", "ir", "h", "hj"}
 
 # Gelar belakang bertitik: s.kom. / m.t. / m.sc / s.pd.i / ph.d. Tiap segmen maksimal 4 huruf
@@ -164,7 +183,7 @@ def simpan_publikasi(cur, dosen_id, view, rows):
         judul = nz(r.get("judul"))
         if not judul:
             continue
-        h = kunci(judul)
+        h = kunci_publikasi(judul)
 
         # publikasi: kalau sudah ada (dari sumber/dosen lain atau manual) tidak dobel, cuma dilengkapi.
         # Aturan ini sama untuk baris SINTA dan manual, jadi tidak perlu gabung().
@@ -230,7 +249,7 @@ def simpan_kegiatan(cur, dosen_id, jenis, rows):
         judul = nz(r.get("judul"))
         if not judul:
             continue
-        k = kunci(jenis, judul, r.get("tahun"))
+        k = kunci_kegiatan(jenis, judul, r.get("tahun"))
 
         cur.execute(
             f"""INSERT INTO kegiatan
@@ -292,7 +311,7 @@ def simpan_iprs(cur, dosen_id, rows):
         if not judul:
             continue
         nomor = nz(r.get("nomor_permohonan"), 100)
-        k = kunci(nomor) if nomor else kunci(judul, r.get("tahun"))
+        k = kunci_iprs(nomor, judul, r.get("tahun"))
 
         # status selalu mengikuti SINTA, termasuk saat baris manual digabung (PRD 5.3).
         cur.execute(
@@ -327,7 +346,7 @@ def simpan_buku(cur, dosen_id, rows):
         if not judul:
             continue
         isbn = nz(r.get("isbn"), 50)
-        k = kunci(isbn) if isbn else kunci(judul, r.get("tahun"))
+        k = kunci_buku(isbn, judul, r.get("tahun"))
 
         cur.execute(
             f"""INSERT INTO buku

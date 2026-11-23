@@ -1,0 +1,4 @@
+﻿{
+  "include": ["crawler/app", "crawler/tests"],
+  "extraPaths": ["crawler/app"]
+}
