@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.22. Berdasarkan ERD versi 6.
+Versi: 1.26. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,6 +29,10 @@ Versi: 1.22. Berdasarkan ERD versi 6.
 | 1.20  | 2026-11-23 | Data manual yang duplikat dengan data `sumber = manual` milik dosen lain kini **otomatis ditautkan** (balas `200`, `ditautkan = true`), tanpa tombol "Tautkan ke saya" dan tanpa endpoint `tautkan` (5.7, 8.2). Duplikat dengan data SINTA tetap `409`. Form kegiatan memakai satu kolom `tim`: nama pertama `ketua`, berikutnya `anggota` (5.7). `kuartil` dan `akreditasi` publikasi manual opsional (5.7). Penegasan baca data per dosen lewat filter `dosen_id` (5.8). Enum `PublikasiSource` perlu nilai `manual`.                |
 | 1.21  | 2026-11-23 | Daftar endpoint baca data tridarma ditetapkan (5.9): `GET /api/tridarma/{dosen,publikasi,kegiatan,iprs,buku}` dan detail `[id]`, data satu dosen lewat query `dosen_id` (bukan path), `kegiatan` satu route dengan `jenis`. Default dosen yang login diatur front-end (8.2). Semua perubahan skema modul 7 (hapus `kegiatan.status`, kolom `sumber`, nilai `manual` di enum `PublikasiSource`) dipusatkan dalam satu migrasi di issue pertama (5.3, 14). Tidak ada perubahan skema untuk kolom `tim` kegiatan: hanya field form (5.7). |
 | 1.22  | 2026-11-23 | Migrasi skema modul 7 dibuat (issue #12, 5.3): enum `SumberData` (`sinta`, `manual`) untuk kolom `sumber`, nilai `manual` di `PublikasiSource`, `kegiatan.status` dihapus. Crawler tidak lagi membaca atau menulis status kegiatan. Konstanta `STATUS_IPRS_MANUAL` di `src/lib/tridarma.ts`. |
+| 1.23  | 2026-11-23 | Aturan penggabungan baris manual oleh crawl diperjelas per tabel (issue #13, 5.3): kolom kosong (`NULL`, teks kosong, atau dana 0) diisi dari SINTA, kolom terisi tidak ditimpa, `iprs.status` selalu mengikuti SINTA, `sumber` menjadi `sinta`. Crawler tidak punya perintah hapus. |
+| 1.24  | 2026-11-23 | Data `sumber = sinta` boleh diubah dan dihapus lewat CRUD oleh dosen yang tertaut (5.7). Aturan hapus berlaku untuk semua sumber: bila masih ada dosen lain yang tertaut, hanya tautan pengguna yang dilepas. `bisa_diubah` (5.9) dan tombol ubah/hapus (8.2) tidak lagi terbatas pada data manual. ACC/validasi data dosen lain dihapus dari RBAC modul 7, dan Staff Kaprodi ikut boleh mengubah data milik sendiri sesuai 5.6. Keputusan terbuka 19 dan 20 ditambahkan. |
+| 1.25  | 2026-11-23 | Keputusan terbuka 19 ditutup: data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`. Keputusan 20 ditutup: data SINTA yang dihapus boleh muncul lagi saat crawl. Keputusan terbuka 21 ditambahkan (perlindungan isian dosen hanya bertahan satu kali crawl karena aturan gabung 5.3). |
+| 1.26  | 2026-11-23 | Keputusan 21 ditutup dengan pilihan (b): baris `manual` tetap `manual` saat ditemukan crawl, jadi crawl selalu hanya mengisi kolom kosong (5.3, 8). Keputusan 16 diubah sesuai itu. Loader tidak lagi mengubah `sumber` saat `ON CONFLICT`. |
 
 ---
 
@@ -132,8 +136,12 @@ Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, me
 - **Aturan 7 hari.** Dosen diproses bila belum pernah sinkron, atau `last_synced_at` sudah lebih dari 7 hari lalu. **Aturan ini berlaku untuk semua peran, termasuk Staff Kaprodi. Tidak ada opsi paksa.** Dosen yang masih dalam 7 hari dilewati dan dicatat sebagai dilewati.
   - **Pengecualian (keputusan 2026-11-22):** bila sinkron terakhir berstatus `FAILED` atau `PARTIAL`, dosen tersebut boleh disinkron ulang walaupun belum 7 hari. Bila statusnya `SUCCESS`, aturan 7 hari berlaku penuh.
 - **Jeda.** 1,5 detik antar tab ke SINTA (keputusan 2026-11-22, lihat 12 nomor 8) dan jeda acak antar dosen.
-- **Sumber data (keputusan 2026-11-22).** Setiap tabel data tridarma (`publikasi`, `kegiatan`, `iprs`, `buku`) punya kolom `sumber` dengan nilai `sinta` atau `manual`. Crawl hanya menulis dan memperbarui baris `sumber = sinta`. Crawl **tidak pernah mengubah atau menghapus** baris `sumber = manual`.
-- **Data manual yang kemudian ditemukan crawl (keputusan 2026-11-22).** Karena `kunci` unik, tidak mungkin ada dua baris untuk data yang sama. Bila crawl menemukan data dengan kunci yang sudah ada sebagai baris manual, baris itu **digabung menjadi satu**: kolom yang masih kosong diisi dari SINTA, `sumber` berubah menjadi `sinta`, dan sesudahnya baris itu mengikuti aturan SINTA (tidak bisa diubah atau dihapus lewat CRUD).
+- **Sumber data (keputusan 2026-11-22).** Setiap tabel data tridarma (`publikasi`, `kegiatan`, `iprs`, `buku`) punya kolom `sumber` dengan nilai `sinta` atau `manual`. Crawl menimpa nilai hanya pada baris `sumber = sinta`. Pada baris `sumber = manual`, crawl **hanya mengisi kolom yang masih kosong**: isian yang sudah ada tidak pernah ditimpa, dan baris manual tidak pernah dihapus.
+- **Data manual yang kemudian ditemukan crawl (keputusan 2026-11-22).** Karena `kunci` unik, tidak mungkin ada dua baris untuk data yang sama. Bila crawl menemukan data dengan kunci yang sudah ada sebagai baris manual, baris itu **digabung menjadi satu**: kolom yang masih kosong diisi dari SINTA, dan `sumber` **tetap `manual`** (keputusan 2026-11-23, 12 nomor 21). Dengan begitu isian pengguna terlindungi di setiap crawl, bukan hanya sekali. Data SINTA tetap bisa diubah dan dihapus lewat CRUD oleh dosen yang tertaut (5.7).
+  - Penerapan di loader (issue #13): `ON CONFLICT (kunci)` (`judul_hash` untuk publikasi) dengan helper `gabung()` di `crawler/app/loader.py`. Untuk `kegiatan`, `iprs`, dan `buku`: baris `sinta` memakai nilai SINTA terbaru bila ada, baris `manual` hanya diisi pada kolom yang kosong. Kosong berarti `NULL` atau teks kosong, dan untuk `kegiatan.dana_nominal` berarti 0.
+  - `publikasi` memakai aturan "hanya isi yang kosong" untuk semua baris, dengan `sitasi` mengambil nilai tertinggi (`GREATEST`).
+  - `iprs.status` selalu mengikuti SINTA, termasuk pada baris manual, karena pengguna tidak bisa mengubah status lewat CRUD (5.7).
+  - Baris baru ditulis `sumber = 'sinta'`. Saat `ON CONFLICT`, kolom `sumber` tidak diubah, jadi baris `sinta` tetap `sinta` dan baris `manual` tetap `manual`. Crawler tidak punya perintah `DELETE`, jadi baris manual yang tidak ditemukan di SINTA tidak pernah berubah.
 - **Perubahan skema dipusatkan (keputusan 2026-11-23).** Semua perubahan skema modul 7 dikerjakan dalam satu migrasi Prisma di issue pertama: hapus `kegiatan.status`, tambah kolom `sumber` di `publikasi`, `kegiatan`, `iprs`, dan `buku`, dan tambah nilai `manual` di enum `PublikasiSource`. Issue lain memakai hasil migrasi itu dan tidak mengubah skema. Migrasinya `20261123090000_modul7_sumber_status_enum` (issue #12): kolom `sumber` bertipe enum `SumberData` (`sinta`, `manual`) dengan bawaan `sinta`, sehingga baris lama otomatis `sinta` dan crawler tidak perlu menulis kolom ini. Status kegiatan lama ikut terhapus.
 - **Status hanya di IPRS (keputusan 2026-11-22).** Kolom `status` hanya ada di tabel `iprs`. Tabel `kegiatan` (penelitian dan pengabdian) **tidak punya kolom status**, dan crawler tidak lagi mengambil atau menyimpan status kegiatan dari SINTA. Untuk `iprs`: baris `sumber = sinta` menyimpan status apa adanya dari SINTA dan diperbarui tiap crawl, baris `sumber = manual` berstatus `Diterima` (5.7). Status SINTA disimpan apa adanya, tanpa dipetakan: bila SINTA menulis `Granted`, yang tersimpan `Granted`, bila `Diterima`, yang tersimpan `Diterima`. Tidak ada validasi oleh Kaprodi atau peran lain untuk data modul 7.
 
@@ -170,7 +178,7 @@ Halaman baca modul 7 (`/tridharma`) **bisa dibuka tanpa login** oleh peran `Umum
 
 Tabel ini berlaku untuk data penelitian, pengabdian, publikasi, buku, dan IPRS. **Bagian pengajaran (5.4) memakai aturannya sendiri.**
 
-| Peran              | Lihat data | Tambah, ubah, hapus data manual | Crawl semua dosen | Crawl satu dosen (pilih) | Crawl diri sendiri                |
+| Peran              | Lihat data | Tambah data manual; ubah dan hapus data milik sendiri (manual dan SINTA) | Crawl semua dosen | Crawl satu dosen (pilih) | Crawl diri sendiri                |
 | ------------------ | ---------- | ------------------------------- | ----------------- | ------------------------ | --------------------------------- |
 | Umum (tanpa login) | ya         | tidak (harus login)             | tidak             | tidak                    | tidak                             |
 | Mahasiswa          | ya         | tidak                           | tidak             | tidak                    | tidak (tidak punya baris `dosen`) |
@@ -195,8 +203,9 @@ Sebagian data tridarma tidak ada di SINTA, jadi pengguna bisa menambahkannya sen
 
 **Batasan kepemilikan.**
 
-- Pengguna hanya boleh mengubah atau menghapus data manual yang terkait dengan dirinya lewat tabel penghubung (`publikasi_dosen`, `kegiatan_anggota`, `iprs_dosen`, `buku_dosen`). Ini mengikuti `dosen_id`, jadi pengguna harus sudah punya baris `dosen` (sinta_id terisi).
-- Data dengan `sumber = sinta` **tidak bisa diubah atau dihapus** lewat CRUD. Data itu hanya diperbarui oleh sinkron (lihat 5.3).
+- Pengguna hanya boleh mengubah atau menghapus data yang terkait dengan dirinya lewat tabel penghubung (`publikasi_dosen`, `kegiatan_anggota`, `iprs_dosen`, `buku_dosen`), baik `sumber = manual` maupun `sumber = sinta`. Ini mengikuti `dosen_id`, jadi pengguna harus sudah punya baris `dosen` (sinta_id terisi). Data yang tidak tertaut ke dirinya tidak bisa diubah atau dihapus, termasuk oleh Kaprodi dan Staff Kaprodi.
+- **Data SINTA boleh diubah dan dihapus (keputusan 2026-11-23).** Sebelumnya data `sumber = sinta` tidak bisa disentuh lewat CRUD. Sekarang boleh, dengan aturan hapus di bawah. Data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`, supaya crawl berikutnya hanya mengisi kolom yang kosong dan tidak menimpa perubahan dosen (12 nomor 19, dan lihat nomor 21). Data SINTA yang dihapus boleh muncul lagi saat crawl berikutnya (12 nomor 20).
+- Tidak ada ACC atau validasi data dosen lain di modul 7. Kaprodi tidak punya hak tambahan atas data dosen lain.
 
 **Status dan validasi (keputusan 2026-11-22).** Data manual **tidak perlu divalidasi** dan tidak ada validator. Hanya `iprs` yang punya kolom `status`:
 
@@ -210,7 +219,7 @@ Sebagian data tridarma tidak ada di SINTA, jadi pengguna bisa menambahkannya sen
 - Cocok dengan data `sumber = manual` dan pengguna belum tertaut: sistem **otomatis menambah satu baris di tabel penghubung milik pengguna** (`publikasi_dosen` dengan `source = manual`, `iprs_dosen`, `buku_dosen`, atau baris di `kegiatan_anggota`), lalu membalas `200` dengan `ditautkan = true`, `id`, dan judul data itu, supaya front-end menampilkan pesan seperti "Data ini sudah ada dan sudah dihubungkan ke akunmu". Tidak ada tombol dan tidak ada endpoint `tautkan`. Tidak ada baris baru di tabel utama, dan isian form lain (jurnal, kuartil, dan seterusnya) tidak dipakai, jadi isi data yang sudah ada tidak berubah. Untuk `kegiatan`: bila baris `kegiatan_anggota` dengan `nama_normal` pengguna sudah ada tetapi `dosen_id` NULL, isi `dosen_id`-nya. Bila belum ada, tambah baris baru dengan `peran` dari posisi nama pengguna di daftar `tim`. Baris orang lain dan `peran` yang sudah ada tidak diubah.
 - Cocok dengan data `sumber = sinta`, atau pengguna sudah tertaut ke data itu: tolak dengan `409` dan pesan yang menegaskan data itu sudah ada. Contoh untuk publikasi: "Paper ini sudah ada di data." Data SINTA tidak ditautkan otomatis, karena tautannya datang dari crawl dosen itu sendiri.
 
-Aturan hapus: bila masih ada dosen lain yang tertaut, hapus hanya melepas tautan pengguna, dan baris data baru terhapus bila tidak ada tautan tersisa. Dengan begitu, tautan yang keliru bisa dilepas lewat hapus. Risiko yang diterima: `kunci` kegiatan (jenis, judul, tahun) bisa bentrok pada judul yang generik, sehingga dua kegiatan berbeda bisa tertaut ke satu baris. Pesan yang menyebut judul data yang ditautkan menjadi penangkalnya.
+Aturan hapus (berlaku untuk data `manual` dan `sinta`, keputusan 2026-11-23): sebelum menghapus, server mengecek apakah masih ada dosen lain yang tertaut ke data itu. Bila ada, hapus hanya melepas tautan pengguna, dan data tetap ada untuk dosen lain. Bila tidak ada, baris data ikut dihapus. Contoh: dosen A menghapus paper yang juga tertaut ke dosen B. Hasilnya, semua baris `publikasi_dosen` milik A untuk paper itu (sumber apa pun) dihapus, sedangkan paper dan tautan B tetap. Untuk `kegiatan`, "tertaut" berarti baris `kegiatan_anggota` dengan `dosen_id` terisi. Melepas tautan berarti menghapus baris anggota milik pengguna, dan kegiatan ikut terhapus bila tidak ada lagi anggota dengan `dosen_id` terisi. Dengan begitu, tautan yang keliru bisa dilepas lewat hapus. Risiko yang diterima: `kunci` kegiatan (jenis, judul, tahun) bisa bentrok pada judul yang generik, sehingga dua kegiatan berbeda bisa tertaut ke satu baris. Pesan yang menyebut judul data yang ditautkan menjadi penangkalnya.
 
 **Penulis dan peserta (keputusan 2026-11-22).**
 
@@ -253,7 +262,7 @@ Semua `GET`, terbuka untuk semua peran termasuk Umum tanpa login. Server tidak m
 - **ID dosen lewat query `dosen_id`, bukan bagian path.** `/publikasi/[id_dosen]` akan bentrok dengan `/publikasi/[id]` (sama-sama satu segmen dinamis). Filter lain (`tahun`, `q`, `page`) juga lewat query, jadi semua saringan ada di satu tempat.
 - Filter `dosen_id` bekerja lewat tabel penghubung (`publikasi_dosen`, `kegiatan_anggota`, `iprs_dosen`, `buku_dosen`), jadi data SINTA dan data manual muncul bersama. Tanpa `dosen_id`, server mengembalikan semua data. Paper yang ditulis dua dosen muncul untuk keduanya (satu baris, dua tautan).
 - `kegiatan` satu route dengan `jenis`, karena `penelitian` dan `pengabdian` satu tabel. Tidak ada `/kegiatan/penelitian/...` terpisah. Nama endpoint dan tabel tetap `iprs`, bukan `hki`.
-- Setiap item memuat `sumber` dan `bisa_diubah` (benar hanya bila pengguna login, `sumber = manual`, dan item terhubung ke dosen milik pengguna). `iprs` memuat `status`, `kegiatan` tidak.
+- Setiap item memuat `sumber` dan `bisa_diubah` (benar bila pengguna login dan item terhubung ke dosen milik pengguna, apa pun sumbernya). `iprs` memuat `status`, `kegiatan` tidak.
 - Tulis (tambah, ubah, hapus) memakai route koleksi yang sama: `POST /api/tridarma/<jenis>`, `PATCH` dan `DELETE /api/tridarma/<jenis>/[id]` (5.7).
 - Pengajaran tidak termasuk di sini (5.4 dan keputusan terbuka 15).
 
@@ -392,7 +401,7 @@ Aturan:
 - Layanan Python **tidak boleh publik**. Wajib header rahasia `X-Internal-Key` (nilai di `INTERNAL_KEY`).
 - Browser **tidak boleh memanggil layanan Python langsung**. Semua lewat route Next.js, supaya `INTERNAL_KEY` tidak pernah sampai ke klien.
 - Hanya satu crawl berjalan pada satu waktu. Permintaan lain yang masuk saat crawl berjalan, baik untuk satu dosen maupun semua dosen dan dari peran apa pun, **ditolak dengan pesan "sedang berjalan" dan tidak diantrekan** (keputusan 2026-11-22, lihat 12 nomor 9–10).
-- Crawl hanya menulis dan memperbarui baris `sumber = sinta`. Baris `sumber = manual` tidak pernah diubah atau dihapus oleh crawl (5.3, 5.7).
+- Crawl menimpa nilai hanya pada baris `sumber = sinta`. Baris `sumber = manual` hanya diisi pada kolom yang kosong, tetap `manual`, dan tidak pernah dihapus oleh crawl (5.3, 5.7).
 - Sisa `IN_PROGRESS` yang sudah lama ditandai `FAILED` saat layanan menyala. Jangan dijalankan di setiap request.
 - Layanan Python hanya meng-UPDATE baris `dosen` yang sudah ada (dibuat oleh Next.js saat dosen atau staff kaprodi mengisi `sinta_id`). Ia tidak membuat baris `dosen`.
 - Layanan Python memakai `DATABASE_URL` berupa URL pooled.
@@ -455,7 +464,7 @@ Variabel lingkungan:
 - Staff Kaprodi: tombol "sinkron semua" dan "pilih dosen" tampil walaupun dirinya belum mengisi `sinta_id`.
 - Umum (tanpa login): hanya bisa melihat data. Tombol tambah, ubah, hapus tidak ditampilkan, dan tombol login yang muncul. Bila tombol tambah, ubah, hapus tetap diklik, arahkan ke login.
 - Mahasiswa: hanya bisa melihat data, tanpa tombol tambah, ubah, hapus, atau crawl.
-- Setiap data tridarma menampilkan label sumbernya (SINTA atau manual). Tombol ubah dan hapus hanya tampil untuk data `manual` milik sendiri (5.7).
+- Setiap data tridarma menampilkan label sumbernya (SINTA atau manual). Tombol ubah dan hapus tampil untuk data milik sendiri, baik `manual` maupun SINTA (5.7). Pesan konfirmasi hapus sebaiknya menjelaskan bahwa data tetap ada untuk dosen lain bila masih ada yang tertaut.
 - Default tampilan (5.9): dosen, Kaprodi, atau Staff Kaprodi yang sudah punya `dosen_id` di sesi membuka tab tridarma dengan `dosen_id` miliknya sendiri. Dosen lain dilihat lewat dropdown filter, yang mengganti `dosen_id`. Peran tanpa `dosen_id` (Umum, Mahasiswa, atau yang belum mengisi `sinta_id`) memanggil tanpa filter atau memilih dosen dulu. Server tidak menentukan default ini.
 - Form tambah data manual menampilkan pesan 409 duplikat apa adanya, termasuk pesan "sudah ada di data". Bila respons `200` memuat `ditautkan = true`, tampilkan pesan bahwa data itu sudah ada dan sudah dihubungkan ke akun pengguna, lengkap dengan judulnya. Tidak ada tombol tambahan.
 - Bagian pengajaran (5.4): Kaprodi dan Staff Kaprodi hanya melihat `kelas` dan `berkas_pengajaran`, jadi tombol tambah, ubah, hapus di bagian itu tidak ditampilkan untuk mereka. Mahasiswa dan Umum tidak melihat bagian ini sama sekali.
@@ -556,7 +565,8 @@ sacibiru-modul/
 │  │  └─ config.py
 │  ├─ tests/
 │  │  ├─ test_norm_nama.py        (unittest)
-│  │  └─ test_kegiatan_iprs.py    (parser dan loader kegiatan/IPRS; tes integrasi opsional lewat CRAWLER_TEST_DATABASE_URL)
+│  │  ├─ test_kegiatan_iprs.py    (parser dan loader kegiatan/IPRS; tes integrasi opsional lewat CRAWLER_TEST_DATABASE_URL)
+│  │  └─ test_gabung_manual.py    (penggabungan baris manual oleh crawl; tes integrasi opsional, selalu di-rollback)
 │  ├─ requirements.txt
 │  ├─ Dockerfile
 │  └─ .env.example
@@ -603,9 +613,12 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 13. _(Sudah diputuskan 2026-11-21: Dosen boleh melihat Dashboard. Lihat 6.1.)_
 14. _(Sebagian sudah diputuskan 2026-11-22: CRUD data manual untuk publikasi, kegiatan, IPRS, dan buku oleh Dosen, Kaprodi, dan Staff Kaprodi, untuk data milik sendiri. Duplikat ditolak. Lihat 5.7. Untuk pengajaran sudah diputuskan di 5.4.)_
 15. **Dosen melihat kelas dan berkas milik dosen lain.** Apakah Dosen boleh melihat `kelas` dan `berkas_pengajaran` dari dosen lain, atau hanya miliknya sendiri? Ditunda, akan dibahas nanti.
-16. _(Sudah diputuskan 2026-11-22: data manual yang kemudian ditemukan crawl digabung menjadi satu baris dan `sumber` menjadi `sinta`. Lihat 5.3.)_
+16. _(Sudah diputuskan 2026-11-22, diubah 2026-11-23: data manual yang kemudian ditemukan crawl digabung menjadi satu baris. `sumber` tetap `manual` (bukan lagi berubah menjadi `sinta`, lihat nomor 21). Lihat 5.3.)_
 17. _(Sudah diputuskan 2026-11-22: status IPRS hasil crawl disimpan apa adanya dari SINTA, IPRS manual diisi `Diterima`. Lihat 5.3 dan 5.7.)_
 18. _(Sudah diputuskan 2026-11-22: `publikasi_dosen.source` untuk data manual bernilai `manual`. Lihat 5.7.)_
+19. _(Sudah diputuskan 2026-11-23: data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`, supaya crawl hanya mengisi kolom yang kosong. Lihat 5.7 dan nomor 21.)_
+20. _(Sudah diputuskan 2026-11-23: diterima. Data SINTA yang dihapus atau dilepas tautannya boleh muncul lagi saat crawl berikutnya.)_
+21. _(Sudah diputuskan 2026-11-23: pilihan (b). Baris `manual` tetap `manual` saat digabung crawl, sehingga crawl selalu hanya mengisi kolom yang kosong dan isian pengguna terlindungi di setiap crawl. Sebelumnya `sumber` kembali menjadi `sinta`, sehingga perlindungan dari nomor 19 hanya bertahan satu kali crawl. Lihat 5.3.)_
 
 ## 13. Di luar cakupan
 

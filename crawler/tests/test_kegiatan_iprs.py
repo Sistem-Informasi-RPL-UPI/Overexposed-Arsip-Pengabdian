@@ -124,10 +124,11 @@ class LoaderKegiatanTest(unittest.TestCase):
         for sql, _ in self.cur.calls:
             self.assertNotIn("status", sql)
 
-    def test_sumber_tidak_ditulis_crawler(self):
-        # Kolom sumber memakai default 'sinta' dari database; aturan baris manual ada di issue #13.
+    def test_crawler_menandai_baris_baru_sebagai_sinta(self):
+        # Baris baru ditulis 'sinta'. Saat konflik, sumber tidak diubah (baris manual tetap manual).
         sql, _ = self.insert_kegiatan()
-        self.assertNotIn("sumber ", sql.replace("sumber_dana", ""))
+        self.assertIn("'sinta')", sql)
+        self.assertNotRegex(sql, r"(?<![.\w])sumber\s*=")
 
     def test_kode_crawler_tidak_menyebut_status_kegiatan(self):
         for fungsi in (loader.simpan_kegiatan, sinta.parse_researches_services):

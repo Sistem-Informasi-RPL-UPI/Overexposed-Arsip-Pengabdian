@@ -63,6 +63,19 @@ def norm_nama(nama):
     return re.sub(r"\s+", " ", t).strip()
 
 
+def gabung(tabel, kolom, teks=True):
+    """
+    Ekspresi SET untuk ON CONFLICT (PRD 5.3).
+    Baris manual: hanya kolom yang kosong yang diisi dari SINTA. Baris SINTA: nilai SINTA terbaru dipakai bila ada.
+    Kolom sumber sengaja tidak diubah saat ON CONFLICT, jadi baris manual tetap manual dan isiannya terlindungi
+    di setiap crawl (PRD 12 nomor 21). Nama tabel dan kolom berasal dari kode ini sendiri, bukan dari input.
+    """
+    lama = f"NULLIF({tabel}.{kolom}, '')" if teks else f"{tabel}.{kolom}"
+    return (f"{kolom} = CASE WHEN {tabel}.sumber = 'manual' "
+            f"THEN COALESCE({lama}, EXCLUDED.{kolom}) "
+            f"ELSE COALESCE(EXCLUDED.{kolom}, {tabel}.{kolom}) END")
+
+
 def nz(v, panjang=None):
     """Kosong -> None. Teks dipotong sesuai panjang kolom supaya tidak error."""
     if v is None:
@@ -153,23 +166,24 @@ def simpan_publikasi(cur, dosen_id, view, rows):
             continue
         h = kunci(judul)
 
-        # publikasi: kalau sudah ada (dari sumber/dosen lain) tidak dobel, cuma dilengkapi
+        # publikasi: kalau sudah ada (dari sumber/dosen lain atau manual) tidak dobel, cuma dilengkapi.
+        # Aturan ini sama untuk baris SINTA dan manual, jadi tidak perlu gabung().
         cur.execute(
             """INSERT INTO publikasi
                  (judul_hash, judul, tahun, penulis, jurnal, sitasi, link,
-                  kuartil, jenis, penerbit, doi, akreditasi)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                  kuartil, jenis, penerbit, doi, akreditasi, sumber)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'sinta')
                ON CONFLICT (judul_hash) DO UPDATE SET
                  tahun      = COALESCE(publikasi.tahun, EXCLUDED.tahun),
-                 penulis    = COALESCE(publikasi.penulis, EXCLUDED.penulis),
-                 jurnal     = COALESCE(publikasi.jurnal, EXCLUDED.jurnal),
+                 penulis    = COALESCE(NULLIF(publikasi.penulis, ''), EXCLUDED.penulis),
+                 jurnal     = COALESCE(NULLIF(publikasi.jurnal, ''), EXCLUDED.jurnal),
                  sitasi     = GREATEST(publikasi.sitasi, EXCLUDED.sitasi),
-                 link       = COALESCE(publikasi.link, EXCLUDED.link),
-                 kuartil    = COALESCE(publikasi.kuartil, EXCLUDED.kuartil),
-                 jenis      = COALESCE(publikasi.jenis, EXCLUDED.jenis),
-                 penerbit   = COALESCE(publikasi.penerbit, EXCLUDED.penerbit),
-                 doi        = COALESCE(publikasi.doi, EXCLUDED.doi),
-                 akreditasi = COALESCE(publikasi.akreditasi, EXCLUDED.akreditasi),
+                 link       = COALESCE(NULLIF(publikasi.link, ''), EXCLUDED.link),
+                 kuartil    = COALESCE(NULLIF(publikasi.kuartil, ''), EXCLUDED.kuartil),
+                 jenis      = COALESCE(NULLIF(publikasi.jenis, ''), EXCLUDED.jenis),
+                 penerbit   = COALESCE(NULLIF(publikasi.penerbit, ''), EXCLUDED.penerbit),
+                 doi        = COALESCE(NULLIF(publikasi.doi, ''), EXCLUDED.doi),
+                 akreditasi = COALESCE(NULLIF(publikasi.akreditasi, ''), EXCLUDED.akreditasi),
                  updated_at = NOW()
                RETURNING id""",
             (h, judul, r.get("tahun"), nz(r.get("penulis") or r.get("creator")), nz(r.get("jurnal")),
@@ -219,14 +233,16 @@ def simpan_kegiatan(cur, dosen_id, jenis, rows):
         k = kunci(jenis, judul, r.get("tahun"))
 
         cur.execute(
-            """INSERT INTO kegiatan
-                 (kunci, jenis, judul, tahun, skema, dana_nominal, sumber_dana)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
+            f"""INSERT INTO kegiatan
+                 (kunci, jenis, judul, tahun, skema, dana_nominal, sumber_dana, sumber)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'sinta')
                ON CONFLICT (kunci) DO UPDATE SET
-                 skema        = COALESCE(EXCLUDED.skema, kegiatan.skema),
-                 dana_nominal = CASE WHEN EXCLUDED.dana_nominal > 0
-                                     THEN EXCLUDED.dana_nominal ELSE kegiatan.dana_nominal END,
-                 sumber_dana  = COALESCE(EXCLUDED.sumber_dana, kegiatan.sumber_dana),
+                 {gabung("kegiatan", "skema")},
+                 dana_nominal = CASE WHEN kegiatan.sumber = 'manual' AND kegiatan.dana_nominal > 0
+                                     THEN kegiatan.dana_nominal
+                                     WHEN EXCLUDED.dana_nominal > 0 THEN EXCLUDED.dana_nominal
+                                     ELSE kegiatan.dana_nominal END,
+                 {gabung("kegiatan", "sumber_dana")},
                  updated_at   = NOW()
                RETURNING id""",
             (k, jenis, judul, r.get("tahun"), nz(r.get("skema"), 255),
@@ -278,17 +294,18 @@ def simpan_iprs(cur, dosen_id, rows):
         nomor = nz(r.get("nomor_permohonan"), 100)
         k = kunci(nomor) if nomor else kunci(judul, r.get("tahun"))
 
+        # status selalu mengikuti SINTA, termasuk saat baris manual digabung (PRD 5.3).
         cur.execute(
-            """INSERT INTO iprs
-                 (kunci, judul, jenis, tahun, nomor_permohonan, status, pemegang, inventor)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            f"""INSERT INTO iprs
+                 (kunci, judul, jenis, tahun, nomor_permohonan, status, pemegang, inventor, sumber)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'sinta')
                ON CONFLICT (kunci) DO UPDATE SET
-                 jenis            = COALESCE(EXCLUDED.jenis, iprs.jenis),
-                 tahun            = COALESCE(EXCLUDED.tahun, iprs.tahun),
-                 nomor_permohonan = COALESCE(EXCLUDED.nomor_permohonan, iprs.nomor_permohonan),
+                 {gabung("iprs", "jenis")},
+                 {gabung("iprs", "tahun", teks=False)},
+                 {gabung("iprs", "nomor_permohonan")},
                  status           = COALESCE(EXCLUDED.status, iprs.status),
-                 pemegang         = COALESCE(EXCLUDED.pemegang, iprs.pemegang),
-                 inventor         = COALESCE(EXCLUDED.inventor, iprs.inventor),
+                 {gabung("iprs", "pemegang")},
+                 {gabung("iprs", "inventor")},
                  updated_at       = NOW()
                RETURNING id""",
             (k, judul, nz(r.get("jenis"), 100), r.get("tahun"), nomor,
@@ -313,16 +330,16 @@ def simpan_buku(cur, dosen_id, rows):
         k = kunci(isbn) if isbn else kunci(judul, r.get("tahun"))
 
         cur.execute(
-            """INSERT INTO buku
-                 (kunci, judul, kategori, penulis, penerbit, tahun, tempat_terbit, isbn)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            f"""INSERT INTO buku
+                 (kunci, judul, kategori, penulis, penerbit, tahun, tempat_terbit, isbn, sumber)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'sinta')
                ON CONFLICT (kunci) DO UPDATE SET
-                 kategori      = COALESCE(EXCLUDED.kategori, buku.kategori),
-                 penulis       = COALESCE(EXCLUDED.penulis, buku.penulis),
-                 penerbit      = COALESCE(EXCLUDED.penerbit, buku.penerbit),
-                 tahun         = COALESCE(EXCLUDED.tahun, buku.tahun),
-                 tempat_terbit = COALESCE(EXCLUDED.tempat_terbit, buku.tempat_terbit),
-                 isbn          = COALESCE(EXCLUDED.isbn, buku.isbn),
+                 {gabung("buku", "kategori")},
+                 {gabung("buku", "penulis")},
+                 {gabung("buku", "penerbit")},
+                 {gabung("buku", "tahun", teks=False)},
+                 {gabung("buku", "tempat_terbit")},
+                 {gabung("buku", "isbn")},
                  updated_at    = NOW()
                RETURNING id""",
             (k, judul, nz(r.get("kategori"), 100), nz(r.get("penulis")),
