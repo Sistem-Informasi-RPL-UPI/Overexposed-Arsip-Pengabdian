@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { BukuTestPanel, type BukuTestItem } from "@/components/BukuTestPanel";
+import { IprsTestPanel, type IprsTestItem } from "@/components/IprsTestPanel";
 import { db } from "@/lib/db";
 import { getTridharmaPermissions } from "@/lib/rbac";
 import { getSession } from "@/lib/session";
@@ -41,7 +42,7 @@ async function TridharmaContent() {
   const ownPerms = getTridharmaPermissions(session);
   const otherPerms = getTridharmaPermissions(session, -1);
 
-  const [dosenRow, rawBuku] = await Promise.all([
+  const [dosenRow, rawBuku, rawIprs] = await Promise.all([
     session
       ? db.dosen.findUnique({
           where: { user_id: session.sub },
@@ -67,11 +68,35 @@ async function TridharmaContent() {
         },
       },
     }),
+    db.iprs.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        kunci: true,
+        judul: true,
+        jenis: true,
+        tahun: true,
+        nomor_permohonan: true,
+        status: true,
+        pemegang: true,
+        inventor: true,
+        sumber: true,
+        iprs_dosen: {
+          select: { dosen_id: true },
+        },
+      },
+    }),
   ]);
 
   const bukuItems: BukuTestItem[] = rawBuku.map(({ buku_dosen, ...buku }) => ({
     ...buku,
     dosenIds: buku_dosen.map((row) => row.dosen_id),
+  }));
+
+  const iprsItems: IprsTestItem[] = rawIprs.map(({ iprs_dosen, ...iprs }) => ({
+    ...iprs,
+    dosenIds: iprs_dosen.map((row) => row.dosen_id),
   }));
 
   return (
@@ -121,18 +146,26 @@ async function TridharmaContent() {
         currentDosenId={dosenRow?.id ?? null}
       />
 
+      <IprsTestPanel
+        items={iprsItems}
+        canManage={ownPerms.canManageOwn}
+        role={ownPerms.role}
+        currentDosenId={dosenRow?.id ?? null}
+      />
+
       <nav
         aria-label="Navigasi pengujian"
         className="flex flex-wrap gap-3 border-t border-[var(--color-border-default)] pt-4"
       >
-        <Link
+        <a
           href="/arsip"
           className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] bg-[var(--color-primary-strong)] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--color-primary)]"
         >
           Uji Akses /arsip
-        </Link>
+        </a>
         <Link
           href="/login"
+          prefetch={false}
           className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-border-strong)] bg-white px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-tint-neutral)]"
         >
           Ganti Role (/login)

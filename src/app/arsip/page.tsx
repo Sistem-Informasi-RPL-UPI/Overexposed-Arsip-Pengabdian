@@ -83,12 +83,14 @@ async function ArsipContent() {
       <nav aria-label="Navigasi pengujian" className="flex flex-wrap gap-3 border-t border-[var(--color-border-default)] pt-4">
         <Link
           href="/tridharma"
+          prefetch={false}
           className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] bg-[var(--color-primary-strong)] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--color-primary)]"
         >
           Ke /tridharma
         </Link>
         <Link
           href="/login"
+          prefetch={false}
           className="inline-flex min-h-[44px] items-center justify-center rounded-[10px] border border-[var(--color-border-strong)] bg-white px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-tint-neutral)]"
         >
           Ganti Role (/login)

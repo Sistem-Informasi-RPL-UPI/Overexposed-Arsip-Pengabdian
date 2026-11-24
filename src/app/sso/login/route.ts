@@ -42,6 +42,7 @@ export async function GET() {
     }).toString();
 
     const response = NextResponse.redirect(url);
+    response.headers.set("Cache-Control", "no-store");
     response.cookies.set(
       SSO_TX_COOKIE,
       JSON.stringify({ state, verifier }),

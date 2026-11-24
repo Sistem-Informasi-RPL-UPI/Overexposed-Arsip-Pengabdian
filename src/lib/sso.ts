@@ -36,6 +36,7 @@ export interface LocalSessionPayload {
 export const SSO_SESSION_COOKIE = "app_session";
 export const SSO_REFRESH_COOKIE = "sso_refresh";
 export const SSO_TX_COOKIE = "sso_tx";
+export const SSO_REFRESHED_SESSION_HEADER = "x-app-refreshed-session";
 export const REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 hari
 
 let jwksCache: {
@@ -227,7 +228,46 @@ export type RefreshResult =
       errorCode?: string;
     };
 
-const inFlightRefreshes = new Map<string, Promise<RefreshResult>>();
+type SuccessfulRefreshResult = Extract<RefreshResult, { ok: true }>;
+
+interface RecentRefreshEntry {
+  result: SuccessfulRefreshResult;
+  expiresAt: number;
+}
+
+const RECENT_REFRESH_TTL_MS = 15_000;
+
+const globalForSsoRefresh = globalThis as typeof globalThis & {
+  __sacibiruInFlightRefreshes?: Map<string, Promise<RefreshResult>>;
+  __sacibiruRecentRefreshes?: Map<string, RecentRefreshEntry>;
+};
+
+const inFlightRefreshes =
+  globalForSsoRefresh.__sacibiruInFlightRefreshes ??
+  (globalForSsoRefresh.__sacibiruInFlightRefreshes = new Map<
+    string,
+    Promise<RefreshResult>
+  >());
+
+const recentRefreshes =
+  globalForSsoRefresh.__sacibiruRecentRefreshes ??
+  (globalForSsoRefresh.__sacibiruRecentRefreshes = new Map<
+    string,
+    RecentRefreshEntry
+  >());
+
+function pruneExpiredRecentRefreshes(now: number) {
+  for (const [token, entry] of recentRefreshes) {
+    if (entry.expiresAt <= now) {
+      recentRefreshes.delete(token);
+    }
+  }
+}
+
+export function resetRefreshSingleFlightCache() {
+  inFlightRefreshes.clear();
+  recentRefreshes.clear();
+}
 
 async function executeRefresh(refreshToken: string): Promise<RefreshResult> {
   const { ssoUrl, clientId, clientSecret } = getSsoConfig();
@@ -297,19 +337,39 @@ async function executeRefresh(refreshToken: string): Promise<RefreshResult> {
 
 /**
  * Menjalankan refresh token dengan single-flight deduplication per token
- * agar dua request paralel tidak memakai refresh token yang sama dua kali.
+ * dan cache singkat (15 detik) untuk hasil sukses, agar request paralel
+ * atau yang sedikit terlambat tidak memakai ulang refresh token yang sudah
+ * dirotasi dan memicu invalid_grant.
  */
 export function refreshWithSsoSingleFlight(
   refreshToken: string
 ): Promise<RefreshResult> {
+  const now = Date.now();
+  pruneExpiredRecentRefreshes(now);
+
+  const cached = recentRefreshes.get(refreshToken);
+  if (cached && cached.expiresAt > now) {
+    return Promise.resolve(cached.result);
+  }
+
   const existing = inFlightRefreshes.get(refreshToken);
   if (existing) {
     return existing;
   }
 
-  const promise = executeRefresh(refreshToken).finally(() => {
-    inFlightRefreshes.delete(refreshToken);
-  });
+  const promise = executeRefresh(refreshToken)
+    .then((result) => {
+      if (result.ok) {
+        recentRefreshes.set(refreshToken, {
+          result,
+          expiresAt: Date.now() + RECENT_REFRESH_TTL_MS,
+        });
+      }
+      return result;
+    })
+    .finally(() => {
+      inFlightRefreshes.delete(refreshToken);
+    });
 
   inFlightRefreshes.set(refreshToken, promise);
   return promise;

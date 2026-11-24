@@ -19,7 +19,11 @@ vi.mock("@/lib/sso", async (importOriginal) => {
   };
 });
 
-import { signLocalSession, verifyLocalSession } from "@/lib/sso";
+import {
+  signLocalSession,
+  SSO_REFRESHED_SESSION_HEADER,
+  verifyLocalSession,
+} from "@/lib/sso";
 import { proxy } from "@/proxy";
 
 const SUB = "92b695bf-8fde-4063-b803-cbbda20bd774";
@@ -118,5 +122,54 @@ describe("proxy: penyegaran sesi mengambil dosen_id terbaru", () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.findUnique).not.toHaveBeenCalled();
     expect(await dosenIdDiCookieBaru(res as never)).toBe("tidak ada cookie baru");
+  });
+
+  it("refresh pada /tridharma meneruskan header x-app-refreshed-session yang valid ke render", async () => {
+    mocks.findUnique.mockResolvedValue({ id: 9 });
+    const kedaluwarsa = await tokenSesi(null, detik() - 60);
+    const req = new NextRequest("http://localhost:3000/tridharma", {
+      headers: { cookie: `app_session=${kedaluwarsa}; sso_refresh=x` },
+    });
+
+    const res = await proxy(req);
+    const forwardedJwt = res.headers.get(
+      `x-middleware-request-${SSO_REFRESHED_SESSION_HEADER}`,
+    );
+
+    expect(forwardedJwt).toBeTruthy();
+    const verified = await verifyLocalSession(forwardedJwt!);
+    expect(verified?.sub).toBe(SUB);
+    expect(verified?.dosen_id).toBe(9);
+  });
+
+  it("header x-app-refreshed-session dari klien dihapus saat tidak ada refresh", async () => {
+    const req = new NextRequest("http://localhost:3000/tridharma", {
+      headers: {
+        accept: "text/html",
+        [SSO_REFRESHED_SESSION_HEADER]: "palsu",
+      },
+    });
+
+    const res = await proxy(req);
+
+    expect(
+      res.headers.get(`x-middleware-request-${SSO_REFRESHED_SESSION_HEADER}`),
+    ).toBeNull();
+    expect(res.headers.get("x-middleware-override-headers")).toBe("accept");
+  });
+
+  it("request prefetch ke /arsip tidak merotasi refresh token dan tidak redirect ke /sso/login", async () => {
+    const req = new NextRequest("http://localhost:3000/arsip", {
+      headers: {
+        cookie: "sso_refresh=x",
+        "sec-purpose": "prefetch",
+      },
+    });
+
+    const res = await proxy(req);
+
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
   });
 });

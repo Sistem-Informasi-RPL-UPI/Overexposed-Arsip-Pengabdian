@@ -89,7 +89,7 @@ export function DevLoginPanel({
       if (target === "/login") {
         router.refresh();
       } else {
-        router.push(target);
+        window.location.assign(target);
       }
     } catch {
       setErrorMessage(

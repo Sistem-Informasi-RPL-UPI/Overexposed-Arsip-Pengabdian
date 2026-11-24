@@ -9,6 +9,7 @@ import {
   refreshWithSsoSingleFlight,
   signLocalSession,
   SSO_REFRESH_COOKIE,
+  SSO_REFRESHED_SESSION_HEADER,
   SSO_SESSION_COOKIE,
   verifyLocalSession,
   type LocalSessionPayload,
@@ -16,6 +17,15 @@ import {
 
 function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
+}
+
+function isPrefetchRequest(request: NextRequest): boolean {
+  const purpose = (
+    request.headers.get("sec-purpose") ??
+    request.headers.get("purpose") ??
+    ""
+  ).toLowerCase();
+  return purpose.includes("prefetch");
 }
 
 function attachCookies(
@@ -56,8 +66,12 @@ export async function proxy(request: NextRequest) {
     activeSession = await verifyLocalSession(sessionCookie);
   }
 
+  // Jangan rotasi refresh token pada browser prefetch supaya tidak beradu
+  // dengan navigasi utama dan memicu invalid_grant.
+  const isPrefetch = isPrefetchRequest(request);
+
   // Jika sesi lokal belum ada atau sudah kedaluwarsa, coba refresh menggunakan sso_refresh
-  if (!activeSession) {
+  if (!activeSession && !isPrefetch) {
     const encryptedRefresh = request.cookies.get(SSO_REFRESH_COOKIE)?.value;
     if (encryptedRefresh) {
       const refreshToken = await decryptRefreshToken(encryptedRefresh);
@@ -126,6 +140,9 @@ export async function proxy(request: NextRequest) {
     }
 
     if (decision.reason === "unauthenticated") {
+      if (isPrefetch) {
+        return new NextResponse(null, { status: 401 });
+      }
       return attachCookies(
         NextResponse.redirect(new URL("/sso/login", request.url)),
         null,
@@ -153,11 +170,22 @@ export async function proxy(request: NextRequest) {
     forwardedCookies.push(`${SSO_SESSION_COOKIE}=${refreshedCookies.session}`);
     forwardedCookies.push(`${SSO_REFRESH_COOKIE}=${refreshedCookies.refresh}`);
     requestHeaders.set("cookie", forwardedCookies.join("; "));
+    requestHeaders.set(SSO_REFRESHED_SESSION_HEADER, refreshedCookies.session);
 
     return attachCookies(
       NextResponse.next({ request: { headers: requestHeaders } }),
       refreshedCookies,
       false
+    );
+  }
+
+  if (request.headers.has(SSO_REFRESHED_SESSION_HEADER)) {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete(SSO_REFRESHED_SESSION_HEADER);
+    return attachCookies(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      null,
+      shouldClearStaleCookies
     );
   }
 

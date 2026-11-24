@@ -188,6 +188,7 @@ export async function GET(request: NextRequest) {
     // 8. Redirect ke halaman utama / dashboard sesuai role
     const redirectPath = payload.role === "Staff_Kaprodi" || payload.role === "Admin" ? "/arsip" : "/tridharma";
     const response = NextResponse.redirect(new URL(redirectPath, request.url));
+    response.headers.set("Cache-Control", "no-store");
 
     response.cookies.set(SSO_SESSION_COOKIE, session, getSessionCookieOptions());
 
