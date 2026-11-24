@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.31. Berdasarkan ERD versi 6.
+Versi: 1.35. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,6 +38,10 @@ Versi: 1.31. Berdasarkan ERD versi 6.
 | 1.29  | 2026-11-24 | Route Next.js sinkron (issue #16, 8.4): `POST /api/dosen/sinkron`, `POST /api/staff-kaprodi/sinkron`, `GET /api/dosen/sinkron/status`, dan `GET /api/crawler/health`. Pemesanan `IN_PROGRESS` lewat `updateMany` dengan cabang `NULL` eksplisit, pesanan dikembalikan bila layanan crawler tidak jadi menjalankan crawl. Ping warm-up hanya untuk peran yang boleh sinkron (Dosen, Kaprodi, Staff Kaprodi), rute `/api/crawler` ditambahkan ke RBAC. Satu sinkron menghasilkan dua baris `log_aktivitas`: permintaan (Next.js) dan hasil (layanan crawler). |
 | 1.30  | 2026-11-24 | Nilai klaim `role` untuk Staff Kaprodi dari SSO ternyata `Staff_Kaprodi` (dengan garis bawah), bukan `Staff Kaprodi`. Kode disesuaikan (`SsoRole`, `normalizeRole`, `isStaffKaprodiRole`, `PERAN_DENGAN_DOSEN`, `ROLE_BOLEH_ISI_SINTA_ID`, `/api/dev-login`, `/auth/callback`) beserta tesnya. Di dokumen ini "Staff Kaprodi" tetap dipakai sebagai nama peran, nilai tekniknya `Staff_Kaprodi` (bagian 4). |
 | 1.31  | 2026-11-24 | Penegasan di 5.3: tautan `publikasi_dosen` hanya berasal dari daftar SINTA dosen yang di-crawl, bukan dari kecocokan nama di `penulis`. Paper yang memuat nama dosen tetapi tidak ada di halaman SINTA dosen itu tidak ditautkan, dan crawl ulang tidak mengubahnya. Tidak ada perubahan kode. |
+| 1.32  | 2026-11-24 | Endpoint baca data tridarma (issue #17, 5.9): `GET /api/tridarma/{dosen,publikasi,kegiatan,iprs,buku}` dan detail `[id]`, terbuka untuk semua peran termasuk Umum. Bentuk respons, urutan, batas pagination, dan `bisa_diubah` dirinci di 5.9. Daftar dosen memakai halaman bawaan 100 (maksimal 200) karena dipakai untuk dropdown. `user_id` dan kolom kunci anti-dobel tidak ikut ke respons. Tidak ada perubahan skema dan RBAC. |
+| 1.33  | 2026-11-24 | Filter endpoint baca tridarma disesuaikan dengan desain (5.9): publikasi `akreditasi` (gabungan kolom kuartil dan akreditasi) dan `sumber_artikel` (nilai `publikasi_dosen.source`, alias `sumber`), kegiatan `skema`, iprs `status` dan `jenis`, buku `kategori`. Filter teks bebas cocok persis tanpa membedakan huruf besar kecil. Koleksi Bruno ditambahkan di folder `bruno/`. |
+| 1.34  | 2026-11-24 | Pilihan filter akreditasi publikasi ditetapkan tetap: `Q1` sampai `Q4` (kolom `kuartil`, Scopus) dan `SINTA 1` sampai `SINTA 6` (kolom `akreditasi`, jurnal lokal), tidak dibaca dari database (5.9). Endpoint baru `GET /api/tridarma/opsi?untuk=` mengembalikan pilihan dropdown filter (combobox yang bisa diketik): tahun, skema, status, jenis, dan kategori dari data, akreditasi dan sumber_artikel tetap. Koleksi Bruno diperluas ke 50 request. |
+| 1.35  | 2026-11-24 | Keputusan terbuka nomor 22 ditambahkan: pencocokan nama untuk tautan publikasi, HKI, dan buku (12). Masih dibahas tim, belum ada perubahan kode atau skema. Aturan 5.3 dan 5.7 yang berlaku tetap: teks penulis tidak dicocokkan. |
 
 ---
 
@@ -133,7 +137,7 @@ Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, me
 - **Anti-dobel.** Kunci dibuat dari teks yang dinormalisasi (huruf kecil, tanpa tanda baca), lalu di-hash md5. `publikasi.judul_hash = md5(norm(judul))`. `kegiatan.kunci = md5(jenis | judul | tahun)`. `iprs.kunci` dari nomor permohonan, atau judul dan tahun bila kosong. `buku.kunci` dari ISBN, atau judul dan tahun bila kosong. Kunci yang sama dipakai untuk data manual (5.7).
   - Penerapan (issue #14): Python di `crawler/app/loader.py` (`kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku`, `norm_nama`) menjadi acuan, dan `src/lib/kunci.ts` adalah padanannya untuk Next.js (`kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`). Nomor permohonan dipotong 100 karakter dan ISBN 50 karakter sebelum di-hash, sesuai panjang kolom. Keduanya dicek terhadap fixture yang sama, `crawler/tests/fixtures/kunci.json`. Mengubah aturan di satu sisi wajib diikuti sisi lain dan fixture.
   - Catatan perilaku: `norm` kunci tidak membuang aksen, jadi "Análisis" dan "Análisis" (aksen terurai/NFD) menghasilkan kunci berbeda. Ini perilaku lama yang dipertahankan supaya `judul_hash` lama tetap cocok. `normNama` membuang aksen, sama dengan `norm_nama`.
-- **Tautan publikasi mengikuti daftar SINTA tiap dosen.** Baris `publikasi_dosen` hanya dibuat dari daftar SINTA dosen yang sedang di-crawl, bukan dari kecocokan nama di kolom `penulis`. Paper yang memuat nama dosen B tetapi tidak ada di halaman SINTA dosen B tidak ditautkan ke B, walaupun dosen A yang punya paper itu sudah di-crawl. Ini bukan bug, dan crawl ulang tidak mengubahnya: daftar yang sudah lengkap menghasilkan hasil sama, sedangkan tab yang terpotong batas SINTA publik (sekitar 10 item) tetap terpotong. Urutan nama di `penulis` (misalnya `Muhammad, Raditya`) tidak berpengaruh karena teks itu tidak dicocokkan (5.7). Pencocokan nama untuk publikasi belum diputuskan.
+- **Tautan publikasi mengikuti daftar SINTA tiap dosen.** Baris `publikasi_dosen` hanya dibuat dari daftar SINTA dosen yang sedang di-crawl, bukan dari kecocokan nama di kolom `penulis`. Paper yang memuat nama dosen B tetapi tidak ada di halaman SINTA dosen B tidak ditautkan ke B, walaupun dosen A yang punya paper itu sudah di-crawl. Ini bukan bug, dan crawl ulang tidak mengubahnya: daftar yang sudah lengkap menghasilkan hasil sama, sedangkan tab yang terpotong batas SINTA publik (sekitar 10 item) tetap terpotong. Urutan nama di `penulis` (misalnya `Muhammad, Raditya`) tidak berpengaruh karena teks itu tidak dicocokkan (5.7). Pencocokan nama untuk publikasi, HKI, dan buku belum diputuskan (12 nomor 22). Untuk kegiatan, pencocokan nama sudah berlaku (`kegiatan_anggota`, aturan di atas).
 - **Upsert.** Crawl ulang tidak menambah baris ganda, hanya memperbarui.
 - **Publikasi.** `sitasi` memakai nilai tertinggi (`GREATEST`). Kolom lain diisi hanya bila masih kosong (`COALESCE`).
 - **Urutan sumber saat simpan:** Scopus, Garuda, Google Scholar SINTA, RAMA. Nilai `publikasi_dosen.source`: `sinta_scopus`, `sinta_garuda`, `sinta_googlescholar`, `sinta_rama`.
@@ -266,6 +270,7 @@ Semua `GET`, terbuka untuk semua peran termasuk Umum tanpa login. Server tidak m
 | `GET /api/tridarma/iprs/[id]`      | Detail satu IPRS.                                                                                          |
 | `GET /api/tridarma/buku`           | Parameter sama dengan publikasi.                                                                           |
 | `GET /api/tridarma/buku/[id]`      | Detail satu buku.                                                                                          |
+| `GET /api/tridarma/opsi`           | Pilihan dropdown filter. Parameter `untuk` (wajib: `publikasi`, `kegiatan`, `iprs`, `buku`), `dosen_id`, `jenis` (kegiatan). |
 
 - **ID dosen lewat query `dosen_id`, bukan bagian path.** `/publikasi/[id_dosen]` akan bentrok dengan `/publikasi/[id]` (sama-sama satu segmen dinamis). Filter lain (`tahun`, `q`, `page`) juga lewat query, jadi semua saringan ada di satu tempat.
 - Filter `dosen_id` bekerja lewat tabel penghubung (`publikasi_dosen`, `kegiatan_anggota`, `iprs_dosen`, `buku_dosen`), jadi data SINTA dan data manual muncul bersama. Tanpa `dosen_id`, server mengembalikan semua data. Paper yang ditulis dua dosen muncul untuk keduanya (satu baris, dua tautan).
@@ -273,6 +278,50 @@ Semua `GET`, terbuka untuk semua peran termasuk Umum tanpa login. Server tidak m
 - Setiap item memuat `sumber` dan `bisa_diubah` (benar bila pengguna login dan item terhubung ke dosen milik pengguna, apa pun sumbernya). `iprs` memuat `status`, `kegiatan` tidak.
 - Tulis (tambah, ubah, hapus) memakai route koleksi yang sama: `POST /api/tridarma/<jenis>`, `PATCH` dan `DELETE /api/tridarma/<jenis>/[id]` (5.7).
 - Pengajaran tidak termasuk di sini (5.4 dan keputusan terbuka 15).
+
+**Penerapan (issue #17).** Route di `src/app/api/tridarma/**`, logika di `src/lib/tridarma-baca.ts` (parameter, pagination, `bisa_diubah`) dan `src/lib/tridarma-data.ts` (query dan bentuk respons). Tidak ada perubahan skema, `src/proxy.ts`, maupun `src/lib/rbac.ts`: rute baca modul 7 sudah terbuka untuk Umum di lapisan proxy (5.6). Respons mengikuti konvensi 6.7 (`{ items, pagination }`, detail `{ data }`, galat `{ message }`) dan memakai `Cache-Control: no-store`, karena `bisa_diubah` bergantung pada sesi.
+
+| Parameter    | Berlaku untuk                      | Aturan                                                                                                                       |
+| ------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `dosen_id`   | publikasi, kegiatan, iprs, buku    | Bilangan bulat positif. Memfilter lewat tabel penghubung tanpa menyaring `sumber`. Tanpa parameter ini, semua data dikembalikan. Dosen yang tidak ada menghasilkan daftar kosong, bukan 404. |
+| `jenis`      | kegiatan                           | `penelitian` atau `pengabdian` (huruf besar kecil tidak dibedakan). Tanpa parameter, keduanya muncul.                        |
+| `jenis`      | iprs                               | Jenis HKI (teks bebas, misalnya `Hak Cipta`). Cocok persis, tanpa membedakan huruf besar kecil. Arti `jenis` berbeda per endpoint. |
+| `akreditasi` | publikasi                          | Pilihan tetap `Q1` sampai `Q4` dan `SINTA 1` sampai `SINTA 6`. `Q1` sampai `Q4` membaca kolom `kuartil` (cocok persis). `SINTA n` membaca kolom `akreditasi` dan menerima tiga bentuk tulisan (`Sinta 2`, `Sinta2`, `S2`), tanpa membedakan huruf besar kecil. Teks lain (misalnya `Q5`) tetap diterima dan dicocokkan persis ke kedua kolom. |
+| `sumber_artikel` | publikasi                      | Nilai `publikasi_dosen.source`: `scopus`, `garuda`, `googlescholar`, `rama`, atau `manual` (awalan `sinta_` boleh ditulis, alias parameter: `sumber`). Bersama `dosen_id` artinya tertaut ke dosen itu lewat sumber itu. Nilai lain dibalas `400`. Beda dengan `sumber` di respons (`sinta` atau `manual`, asal baris). |
+| `skema`      | kegiatan                           | Cocok persis dengan nilai `skema`, tanpa membedakan huruf besar kecil.                                                       |
+| `status`     | iprs                               | Cocok persis dengan nilai `status` (misalnya `Granted` atau `Diterima`), tanpa membedakan huruf besar kecil.                 |
+| `kategori`   | buku                               | Cocok persis dengan nilai `kategori`, tanpa membedakan huruf besar kecil.                                                    |
+| `tahun`      | publikasi, kegiatan, iprs, buku    | Bilangan bulat 1000 sampai 9999.                                                                                             |
+| `q`          | semua daftar                       | Pencarian judul (untuk dosen: nama) tanpa membedakan huruf besar kecil, maksimal 200 karakter.                               |
+| `page`, `pageSize` | semua daftar                 | Bawaan 1 dan 10, `pageSize` maksimal 50. Daftar dosen: bawaan 100, maksimal 200. Nilai `page` yang tidak valid menjadi 1.   |
+
+Filter khusus satu endpoint (`akreditasi`, `sumber_artikel`, `skema`, `status`, `kategori`, dan `jenis`) diabaikan di endpoint lain. Filter teks bebas maksimal 255 karakter. `skema`, `status`, `jenis`, dan `kategori` cocok persis dengan nilai yang tampil di item, jadi pilihannya diambil dari data lewat endpoint opsi di bawah.
+
+**Pilihan filter (`GET /api/tridarma/opsi`).** Dropdown di front-end berupa combobox yang bisa diketik, sehingga endpoint ini mengirim daftar pilihan lengkap dan penyaringan saat mengetik dilakukan di klien. Terbuka untuk semua peran. Respons `{ "data": { "<field>": [{ "value", "label" }] } }`, dengan `value` selalu teks yang langsung dipakai sebagai nilai parameter filter.
+
+| `untuk`     | Field respons                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| `publikasi` | `tahun` (data), `akreditasi` (tetap), `sumber_artikel` (tetap)                                  |
+| `kegiatan`  | `tahun`, `skema` (data). `jenis=penelitian` atau `pengabdian` membatasi pilihan ke satu jenis.  |
+| `iprs`      | `tahun`, `status`, `jenis` (data)                                                               |
+| `buku`      | `tahun`, `kategori` (data)                                                                      |
+
+- `akreditasi` tetap (keputusan 2026-11-24): `Q1`, `Q2`, `Q3`, `Q4`, `SINTA 1` sampai `SINTA 6`, tidak dibaca dari database. `sumber_artikel` tetap: `scopus`, `garuda`, `googlescholar`, `rama`, `manual` (label Scopus, Garuda, Google Scholar, RAMA, Manual).
+- Pilihan dari data: nilai unik, spasi dirapikan, nilai kosong dibuang, dan tulisan yang hanya beda huruf besar kecil digabung. `tahun` terbaru dulu, teks diurutkan A sampai Z. Maksimal 500 nilai per field.
+- `dosen_id` (opsional) membatasi pilihan ke data satu dosen lewat tabel penghubung, jadi dropdown tidak menampilkan nilai yang tidak ada di data dosen itu. Daftar tetap (`akreditasi`, `sumber_artikel`) tidak berubah.
+- `untuk` kosong atau tidak dikenal, dan `dosen_id` atau `jenis` yang tidak valid, dibalas `400`.
+
+Parameter yang tidak valid dibalas `400`. Id di path yang bukan bilangan bulat positif dibalas `400`, id yang tidak ada `404`. Urutan daftar: tahun terbaru dulu, tahun kosong di akhir, lalu id terbaru. Daftar dosen: nama A sampai Z, nama kosong di akhir.
+
+Bentuk item (semua memuat `sumber` dan `bisa_diubah`):
+
+- `publikasi`: kolom publikasi, `dosen` (`[{ id, nama }]` unik), `sumber_artikel` (nilai `publikasi_dosen.source` yang tertaut, misalnya `sinta_scopus`, `sinta_garuda`, `manual`). Detail menambah `tautan` (per baris `publikasi_dosen`: `dosen_id`, `source`, `urutan_penulis`, `total_penulis`, `sitasi_sumber`, `link_sumber`). Kolom `judul_hash` tidak ikut.
+- `kegiatan`: kolom kegiatan tanpa `status` dan tanpa `kunci`, `dana_nominal` sebagai angka, dan `peserta` (`[{ nama, peran, dosen_id }]`, ketua lebih dulu, `dosen_id` bisa `null` untuk peserta yang bukan dosen terdaftar).
+- `iprs`: kolom IPRS termasuk `status`, `dosen`. `kunci` tidak ikut.
+- `buku`: kolom buku, `dosen`. `kunci` tidak ikut.
+- `dosen` (daftar): `id`, `sinta_id`, `nama`, `afiliasi`, `departemen`, `sync_status`, `last_synced_at`. Detail menambah `skor` (`[{ label, nilai }]`, nilai sebagai angka) dan `metrik` (`[{ label, scopus, gscholar, wos }]`). `user_id` (sub SSO) tidak pernah ikut.
+
+`bisa_diubah` benar bila sesi ada, perannya boleh mengubah data milik sendiri (Dosen, Kaprodi, Staff Kaprodi), dan `dosen_id` di sesi termasuk dosen yang tertaut ke item lewat tabel penghubung. Untuk `kegiatan`, hanya baris `kegiatan_anggota` dengan `dosen_id` terisi yang dihitung. Sumber `sinta` dan `manual` diperlakukan sama. Nilai ini membaca `dosen_id` dari sesi (cookie `app_session`), jadi ikut berubah saat sesi diperbarui setelah `sinta_id` diisi.
 
 ## 6. Modul 4: Arsip Prodi (Ruang Arsip Digital)
 
@@ -605,6 +654,7 @@ sacibiru-modul/
 │  │     │  │  └─ [id]/route.ts       (PATCH ubah, DELETE hapus)
 │  │     │  └─ validasi/route.ts      (GET daftar untuk halaman Validasi)
 │  │     └─ tridarma/
+│  │        ├─ opsi/route.ts          (GET pilihan dropdown filter, 5.9)
 │  │        ├─ dosen/...              (GET daftar dan profil, 5.9)
 │  │        ├─ publikasi/...          (GET daftar dan detail 5.9; CRUD manual milik sendiri dan penautan otomatis 5.7)
 │  │        ├─ kegiatan/...           (GET daftar dan detail 5.9; CRUD manual milik sendiri dan penautan otomatis 5.7)
@@ -625,6 +675,9 @@ sacibiru-modul/
 │  │  ├─ dashboard.ts             (query dashboard arsip)
 │  │  ├─ tridarma.ts              (konstanta modul 7: STATUS_IPRS_MANUAL, SUMBER_SINTA, SUMBER_MANUAL)
 │  │  ├─ kunci.ts                 (kunci anti-dobel dan normNama, padanan loader.py)
+│  │  ├─ tridarma-baca.ts         (parameter, pagination, bisa_diubah, dan pembungkus respons endpoint baca)
+│  │  ├─ tridarma-data.ts         (query dan bentuk respons dosen, publikasi, kegiatan, iprs, buku)
+│  │  ├─ tridarma-opsi.ts         (pilihan dropdown filter: daftar tetap dan nilai unik dari data)
 │  │  ├─ sinkron.ts               (aturan 7 hari dan kondisi updateMany atomik, logika murni)
 │  │  ├─ sinkron-proses.ts        (alur pesan IN_PROGRESS, panggil layanan, kembalikan pesanan, log)
 │  │  ├─ rbac.ts
@@ -651,8 +704,9 @@ sacibiru-modul/
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
 │  ├─ helpers/fixtures.ts
 │  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci, sinkron, rbac-sinkron)
-│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas, sinkron, sinkron-status-health: handler dengan database dan layanan crawler tiruan)
+│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas, sinkron, sinkron-status-health, tridarma-baca, tridarma-opsi: handler dengan database dan layanan crawler tiruan)
 │  └─ proxy.test.ts               (penyegaran sesi dan dosen_id)
+├─ bruno/                         (koleksi Bruno untuk menguji semua endpoint: login dev, sinkron, tridarma, arsip, layanan Python; buka lewat Open Collection)
 ├─ vitest.config.ts
 ├─ .env.example
 └─ package.json
@@ -697,6 +751,14 @@ Nomor disimpan tetap supaya referensi di bagian lain tetap benar. Yang sudah dip
 19. _(Sudah diputuskan 2026-11-23: data SINTA yang diubah lewat CRUD berubah menjadi `sumber = manual`, supaya crawl hanya mengisi kolom yang kosong. Lihat 5.7 dan nomor 21.)_
 20. _(Sudah diputuskan 2026-11-23: diterima. Data SINTA yang dihapus atau dilepas tautannya boleh muncul lagi saat crawl berikutnya.)_
 21. _(Sudah diputuskan 2026-11-23: pilihan (b). Baris `manual` tetap `manual` saat digabung crawl, sehingga crawl selalu hanya mengisi kolom yang kosong dan isian pengguna terlindungi di setiap crawl. Sebelumnya `sumber` kembali menjadi `sinta`, sehingga perlindungan dari nomor 19 hanya bertahan satu kali crawl. Lihat 5.3.)_
+22. **Pencocokan nama untuk tautan publikasi, HKI, dan buku.** Belum diputuskan, sedang dibahas tim. Jangan dibangun sebelum diputuskan. Saat ini tautan `publikasi_dosen`, `iprs_dosen`, dan `buku_dosen` hanya berasal dari daftar SINTA dosen yang di-crawl, dan teks penulis, pemegang, dan inventor tidak dicocokkan ke dosen (5.3 dan 5.7). Hanya `kegiatan` yang sudah mencocokkan nama peserta ke `dosen.nama_normal` (5.3). Akibatnya paper yang memuat nama dosen B tetapi tidak ada di halaman SINTA B tidak tertaut ke B (contoh: nama ditulis `Muhammad, Raditya`, atau daftar SINTA terpotong batas 10 item). Pertanyaannya: apakah pencocokan nama ditambahkan untuk ketiga jenis data itu? Bila ya, usulan berikut belum disetujui dan perlu diputuskan satu per satu:
+    - **Aturan pencocokan (usulan).** Kumpulan kata nama yang sama setelah normalisasi (`norm_nama`), tanpa peduli urutan kata (`Muhammad, Raditya` sama dengan `Raditya Muhammad`). Hanya cocok bila tepat satu dosen, dan nama dosen minimal dua kata supaya nama satu kata tidak salah cocok. Pemisah nama dalam teks: `;` bila ada, selain itu koma. Format teks berbeda per sumber (Garuda `;` dan nama belakang dulu, Google Scholar dan HKI koma, Scopus satu nama dengan inisial atau gelar), jadi hasilnya perlu dicek.
+    - **Penanda asal tautan (usulan).** Satu nilai baru `nama` di enum `PublikasiSource` (`publikasi_dosen.source`, tanpa kolom baru), dan satu kolom `asal` (`sinta` atau `nama`, bawaan `sinta`) di `iprs_dosen` dan `buku_dosen`. Baris yang ada otomatis `sinta`. `kegiatan_anggota` tidak berubah. Alternatif: satu tabel terpisah untuk tautan hasil nama, yang lebih rumit karena tiap query baca `dosen_id` harus menggabungkan dua sumber. Tanpa penanda, tautan hasil nama tidak bisa dibedakan dari tautan SINTA, jadi tidak bisa ditinjau atau ditarik kembali bila aturan pencocokan diperbaiki.
+    - **Bila SINTA kemudian memuat paper yang sama (usulan).** Tautan hasil nama tidak dibuat bila dosen itu sudah punya tautan SINTA untuk item itu, dan tautan hasil nama dihapus saat tautan SINTA muncul.
+    - **Hak ubah dan hapus.** Apakah `bisa_diubah` bernilai benar untuk tautan hasil nama (usulan: ya, karena pencocokannya ketat dan tautannya bisa dilepas). Bila ya, kesalahan cocok membuat dosen yang salah bisa mengubah data orang lain.
+    - **Tautan yang dilepas.** Apakah tautan hasil nama yang dilepas dosen lewat hapus boleh dibuat lagi oleh sinkron berikutnya (usulan: boleh, sama dengan nomor 20), atau perlu daftar penolakan.
+    - **Data yang sudah ada (usulan).** Satu kali backfill. Sebelum menulis, jalankan laporan percobaan yang hanya membaca: daftar tautan yang akan dibuat dan kasus yang meragukan (nama ganda, nama satu kata), untuk ditinjau dulu.
+    - **Dampak ke dokumen.** Bila disetujui, 5.3 dan 5.7 (teks penulis tidak dicocokkan) diubah, dan satu migrasi Prisma ditambahkan (kolom `asal`, nilai enum `nama`).
 
 ## 13. Di luar cakupan
 
