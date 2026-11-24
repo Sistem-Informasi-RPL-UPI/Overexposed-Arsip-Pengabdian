@@ -46,7 +46,7 @@ const STAFF_SESSION = {
   ...KAPRODI_SESSION,
   sub: "00000000-0000-4000-8000-000000000002",
   name: "Staff Kaprodi",
-  role: "Staff Kaprodi" as const,
+  role: "Staff_Kaprodi" as const,
 };
 
 const DOSEN_SESSION = {

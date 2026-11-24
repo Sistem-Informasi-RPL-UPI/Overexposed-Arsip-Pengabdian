@@ -15,7 +15,7 @@ export function sesi(role: string): LocalSessionPayload {
   };
 }
 
-export const PERAN_STAFF = ["Staff Kaprodi", "Admin"] as const;
+export const PERAN_STAFF = ["Staff_Kaprodi", "Admin"] as const;
 export const PERAN_NON_STAFF = ["Kaprodi", "Dosen", "Mahasiswa", "Umum"] as const;
 
 export function ctx(id: string) {

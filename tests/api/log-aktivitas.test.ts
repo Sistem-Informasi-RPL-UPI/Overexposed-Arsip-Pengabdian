@@ -43,7 +43,7 @@ describe("GET /api/log-aktivitas", () => {
   });
 
   it.each([
-    ["Staff Kaprodi", 200],
+    ["Staff_Kaprodi", 200],
     ["Admin", 200],
     ["Kaprodi", 200],
     ["Dosen", 403],

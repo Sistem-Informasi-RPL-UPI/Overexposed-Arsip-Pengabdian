@@ -9,7 +9,7 @@ import {
 export type SsoRole =
   | "Dosen"
   | "Kaprodi"
-  | "Staff Kaprodi"
+  | "Staff_Kaprodi"
   | "Admin"
   | "Mahasiswa"
   | "Umum";

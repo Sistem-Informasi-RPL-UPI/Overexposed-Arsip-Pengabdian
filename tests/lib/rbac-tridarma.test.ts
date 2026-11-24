@@ -16,7 +16,7 @@ describe("getTridharmaPermissions", () => {
   it.each([
     ["Dosen", true],
     ["Kaprodi", true],
-    ["Staff Kaprodi", true],
+    ["Staff_Kaprodi", true],
     ["Admin", true],
     ["Mahasiswa", false],
     ["Umum", false],
@@ -50,10 +50,10 @@ describe("getTridharmaPermissions", () => {
     });
 
     it("pemilik di antara beberapa dosen yang tertaut", () => {
-      expect(getTridharmaPermissions(sesiDosen("Staff Kaprodi", 7), [3, 7, 9]).canDelete).toBe(true);
+      expect(getTridharmaPermissions(sesiDosen("Staff_Kaprodi", 7), [3, 7, 9]).canDelete).toBe(true);
     });
 
-    it.each(["Dosen", "Kaprodi", "Staff Kaprodi"])("%s tidak boleh mengubah data dosen lain", (peran) => {
+    it.each(["Dosen", "Kaprodi", "Staff_Kaprodi"])("%s tidak boleh mengubah data dosen lain", (peran) => {
       expect(getTridharmaPermissions(sesiDosen(peran, 7), 8)).toMatchObject({ isOwner: false, canUpdate: false, canDelete: false });
     });
 
@@ -71,7 +71,7 @@ describe("RBAC rute modul 7 (lapisan proxy)", () => {
   it.each(["/tridharma", "/api/tridarma/publikasi", "/api/tridarma/kegiatan/3", "/api/tridharma/apa-saja"])(
     "GET %s terbuka untuk semua, termasuk tanpa login",
     (path) => {
-      for (const peran of [null, "Umum", "Mahasiswa", "Dosen", "Kaprodi", "Staff Kaprodi"]) {
+      for (const peran of [null, "Umum", "Mahasiswa", "Dosen", "Kaprodi", "Staff_Kaprodi"]) {
         expect(keputusan(path, "GET", peran)).toBe("izin");
       }
     },
@@ -84,7 +84,7 @@ describe("RBAC rute modul 7 (lapisan proxy)", () => {
   ];
 
   it.each(tulis)("%s %s: Dosen, Kaprodi, Staff Kaprodi, dan Admin diizinkan", (method, path) => {
-    for (const peran of ["Dosen", "Kaprodi", "Staff Kaprodi", "Admin"]) {
+    for (const peran of ["Dosen", "Kaprodi", "Staff_Kaprodi", "Admin"]) {
       expect(keputusan(path, method, peran)).toBe("izin");
     }
   });

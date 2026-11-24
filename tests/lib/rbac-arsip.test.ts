@@ -10,12 +10,12 @@ function keputusan(path: string, method: string, peran: string | null): Keputusa
   return hasil.reason === "unauthenticated" ? "belum_login" : "dilarang";
 }
 
-const STAFF = ["Staff Kaprodi", "Admin"];
+const STAFF = ["Staff_Kaprodi", "Admin"];
 
 describe("RBAC rute /api/arsip (lapisan proxy)", () => {
   describe("daftar dan detail arsip (GET)", () => {
     it.each([
-      ["/api/arsip", "Staff Kaprodi", "izin"],
+      ["/api/arsip", "Staff_Kaprodi", "izin"],
       ["/api/arsip", "Kaprodi", "izin"],
       ["/api/arsip", "Dosen", "izin"],
       ["/api/arsip", "Mahasiswa", "dilarang"],
@@ -56,7 +56,7 @@ describe("RBAC rute /api/arsip (lapisan proxy)", () => {
 
 describe("RBAC rute /api/dashboard (lapisan proxy)", () => {
   it.each([
-    ["Staff Kaprodi", "izin"],
+    ["Staff_Kaprodi", "izin"],
     ["Admin", "izin"],
     ["Kaprodi", "izin"],
     ["Dosen", "izin"],
@@ -70,7 +70,7 @@ describe("RBAC rute /api/dashboard (lapisan proxy)", () => {
 
 describe("RBAC rute /api/log-aktivitas (lapisan proxy)", () => {
   it.each([
-    ["Staff Kaprodi", "izin"],
+    ["Staff_Kaprodi", "izin"],
     ["Admin", "izin"],
     ["Kaprodi", "izin"],
     ["Dosen", "dilarang"],
@@ -83,13 +83,13 @@ describe("RBAC rute /api/log-aktivitas (lapisan proxy)", () => {
 
   it.each(["POST", "PATCH", "DELETE"])("%s ditolak, bahkan untuk Kaprodi (log hanya dibaca)", (method) => {
     expect(keputusan("/api/log-aktivitas", method, "Kaprodi")).toBe("dilarang");
-    expect(keputusan("/api/log-aktivitas", method, "Staff Kaprodi")).toBe("dilarang");
+    expect(keputusan("/api/log-aktivitas", method, "Staff_Kaprodi")).toBe("dilarang");
   });
 });
 
 describe("RBAC rute /api/arsip/kategori (lapisan proxy)", () => {
   it.each([
-    ["Staff Kaprodi", "izin"],
+    ["Staff_Kaprodi", "izin"],
     ["Admin", "izin"],
     ["Kaprodi", "izin"],
     ["Dosen", "dilarang"],

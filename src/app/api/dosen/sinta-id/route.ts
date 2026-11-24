@@ -8,7 +8,7 @@ import {
 } from "@/lib/sso";
 import { getSession } from "@/lib/session";
 
-const ROLE_BOLEH_ISI_SINTA_ID = ["Dosen", "Kaprodi", "Staff Kaprodi", "Admin"];
+const ROLE_BOLEH_ISI_SINTA_ID = ["Dosen", "Kaprodi", "Staff_Kaprodi", "Admin"];
 const SINTA_ID_PATTERN = /^\d{1,20}$/;
 
 const DOSEN_SELECT = {

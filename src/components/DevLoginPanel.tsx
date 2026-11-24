@@ -27,7 +27,7 @@ const ROLE_OPTIONS: Array<{
       "Tridarma: CRUD milik sendiri, ACC data lain. Arsip: view dan ACC.",
   },
   {
-    role: "Staff Kaprodi",
+    role: "Staff_Kaprodi",
     label: "Staff Kaprodi",
     permissionSummary:
       "Tridarma: view saja. Arsip: CRUD arsip & kategori, lihat log.",

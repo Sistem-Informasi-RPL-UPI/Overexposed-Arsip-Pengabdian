@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 
 describe("cariDosenIdSesi", () => {
-  it.each(["Dosen", "Kaprodi", "Staff Kaprodi", "Admin"])("peran %s: mencari baris dosen lewat user_id", async (peran) => {
+  it.each(["Dosen", "Kaprodi", "Staff_Kaprodi", "Admin"])("peran %s: mencari baris dosen lewat user_id", async (peran) => {
     findUnique.mockResolvedValue({ id: 5 });
 
     expect(await cariDosenIdSesi(SUB, peran)).toBe(5);

@@ -68,7 +68,7 @@ async function baca(res: Response) {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
-  mocks.getSession.mockResolvedValue(sesi("Staff Kaprodi"));
+  mocks.getSession.mockResolvedValue(sesi("Staff_Kaprodi"));
 });
 
 describe("GET /api/arsip (daftar)", () => {
@@ -84,7 +84,7 @@ describe("GET /api/arsip (daftar)", () => {
   });
 
   it.each([
-    ["Staff Kaprodi", 200],
+    ["Staff_Kaprodi", 200],
     ["Admin", 200],
     ["Kaprodi", 200],
     ["Dosen", 200],
@@ -136,7 +136,7 @@ describe("GET /api/arsip/[id] (detail)", () => {
   it.each([
     ["Dosen", 200],
     ["Kaprodi", 200],
-    ["Staff Kaprodi", 200],
+    ["Staff_Kaprodi", 200],
     ["Mahasiswa", 403],
   ])("peran %s mendapat %i", async (peran, status) => {
     mocks.getSession.mockResolvedValue(sesi(peran));

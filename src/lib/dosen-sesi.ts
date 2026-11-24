@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 // Peran yang bisa punya baris dosen (PRD 5.1). Mahasiswa dan Umum tidak pernah punya.
-const PERAN_DENGAN_DOSEN = new Set(["Dosen", "Kaprodi", "Staff Kaprodi", "Admin"]);
+const PERAN_DENGAN_DOSEN = new Set(["Dosen", "Kaprodi", "Staff_Kaprodi", "Admin"]);
 
 /**
  * Mencari dosen_id untuk sesi berdasarkan user_id = sub.

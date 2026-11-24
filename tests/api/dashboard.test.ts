@@ -17,7 +17,7 @@ const URL_DASHBOARD = "http://localhost/api/dashboard";
 beforeEach(() => {
   vi.resetAllMocks();
   vi.spyOn(console, "error").mockImplementation(() => {});
-  mocks.getSession.mockResolvedValue(sesi("Staff Kaprodi"));
+  mocks.getSession.mockResolvedValue(sesi("Staff_Kaprodi"));
   mocks.db.$queryRaw.mockImplementation(async (strings: string[]) => {
     const t = strings.join("");
     if (t.includes("'Aktif'")) return [{ total: 4 }];
@@ -45,7 +45,7 @@ describe("GET /api/dashboard", () => {
   });
 
   it.each([
-    ["Staff Kaprodi", 200],
+    ["Staff_Kaprodi", 200],
     ["Admin", 200],
     ["Kaprodi", 200],
     ["Dosen", 200],

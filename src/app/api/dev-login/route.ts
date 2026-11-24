@@ -26,7 +26,7 @@ const DEV_USERS: Record<
     email: "kaprodi.dev@upi.edu",
     nip: "199001012020121002",
   },
-  "Staff Kaprodi": {
+  Staff_Kaprodi: {
     sub: "00000000-0000-4000-8000-000000000003",
     name: "Staff Kaprodi Penguji (Dev)",
     email: "staff.kaprodi.dev@upi.edu",
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
   const dummyUser = DEV_USERS[role];
   const mode = request.nextUrl.searchParams.get("mode");
   const defaultRedirect =
-    role === "Staff Kaprodi" || role === "Admin" ? "/arsip" : "/tridharma";
+    role === "Staff_Kaprodi" || role === "Admin" ? "/arsip" : "/tridharma";
   const redirectPath = sanitizeNextPath(
     request.nextUrl.searchParams.get("next"),
     defaultRedirect
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     if (
       role === "Dosen" ||
       role === "Kaprodi" ||
-      role === "Staff Kaprodi" ||
+      role === "Staff_Kaprodi" ||
       role === "Admin"
     ) {
       const dosen = await db.dosen.findUnique({

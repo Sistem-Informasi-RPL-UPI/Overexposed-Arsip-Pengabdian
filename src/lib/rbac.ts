@@ -11,7 +11,7 @@ export function normalizeRole(role: string | null | undefined): AppRole {
   switch (role) {
     case "Dosen":
     case "Kaprodi":
-    case "Staff Kaprodi":
+    case "Staff_Kaprodi":
     case "Admin":
     case "Mahasiswa":
     case "Umum":
@@ -22,7 +22,7 @@ export function normalizeRole(role: string | null | undefined): AppRole {
 }
 
 export function isStaffKaprodiRole(role: AppRole): boolean {
-  return role === "Staff Kaprodi" || role === "Admin";
+  return role === "Staff_Kaprodi" || role === "Admin";
 }
 
 function matchesPrefix(pathname: string, prefix: string): boolean {

@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
 
     // 5. Cari baris dosen berdasarkan user_id (PRD 5.1: tidak membuat/menimpa baris saat login)
     let dosenId: number | null = null;
-    if (payload.role === "Dosen" || payload.role === "Kaprodi" || payload.role === "Staff Kaprodi" || payload.role === "Admin") {
+    if (payload.role === "Dosen" || payload.role === "Kaprodi" || payload.role === "Staff_Kaprodi" || payload.role === "Admin") {
       const dosen = await db.dosen.findUnique({
         where: {
           user_id: payload.sub,
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
     );
 
     // 8. Redirect ke halaman utama / dashboard sesuai role
-    const redirectPath = payload.role === "Staff Kaprodi" || payload.role === "Admin" ? "/arsip" : "/tridharma";
+    const redirectPath = payload.role === "Staff_Kaprodi" || payload.role === "Admin" ? "/arsip" : "/tridharma";
     const response = NextResponse.redirect(new URL(redirectPath, request.url));
 
     response.cookies.set(SSO_SESSION_COOKIE, session, getSessionCookieOptions());
