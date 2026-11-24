@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { BukuTestPanel, type BukuTestItem } from "@/components/BukuTestPanel";
+import { db } from "@/lib/db";
 import { getTridharmaPermissions } from "@/lib/rbac";
 import { getSession } from "@/lib/session";
 
@@ -38,6 +40,39 @@ async function TridharmaContent() {
   const session = await getSession();
   const ownPerms = getTridharmaPermissions(session);
   const otherPerms = getTridharmaPermissions(session, -1);
+
+  const [dosenRow, rawBuku] = await Promise.all([
+    session
+      ? db.dosen.findUnique({
+          where: { user_id: session.sub },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    db.buku.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        kunci: true,
+        judul: true,
+        kategori: true,
+        penulis: true,
+        penerbit: true,
+        tahun: true,
+        tempat_terbit: true,
+        isbn: true,
+        sumber: true,
+        buku_dosen: {
+          select: { dosen_id: true },
+        },
+      },
+    }),
+  ]);
+
+  const bukuItems: BukuTestItem[] = rawBuku.map(({ buku_dosen, ...buku }) => ({
+    ...buku,
+    dosenIds: buku_dosen.map((row) => row.dosen_id),
+  }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,6 +114,13 @@ async function TridharmaContent() {
         </ul>
       </div>
 
+      <BukuTestPanel
+        items={bukuItems}
+        canManage={ownPerms.canManageOwn}
+        role={ownPerms.role}
+        currentDosenId={dosenRow?.id ?? null}
+      />
+
       <nav
         aria-label="Navigasi pengujian"
         className="flex flex-wrap gap-3 border-t border-[var(--color-border-default)] pt-4"
@@ -111,7 +153,7 @@ async function TridharmaContent() {
 export default function TridharmaPage() {
   return (
     <main className="flex min-h-screen flex-col items-center bg-[var(--color-bg-page)] px-4 py-10">
-      <div className="my-auto w-full max-w-[560px] rounded-[18px] bg-[var(--color-bg-surface)] p-6 shadow-[0px_4px_20px_rgba(11,42,76,0.06)] sm:p-8">
+      <div className="my-auto w-full max-w-[920px] rounded-[18px] bg-[var(--color-bg-surface)] p-5 shadow-[0px_4px_20px_rgba(11,42,76,0.06)] sm:p-8">
         <header className="mb-5">
           <p className="text-[12px] font-bold uppercase tracking-[0.6px] text-[var(--color-primary-strong)]">
             Modul 7
