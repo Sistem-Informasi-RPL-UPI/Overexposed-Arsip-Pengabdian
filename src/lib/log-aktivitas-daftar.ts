@@ -7,7 +7,7 @@ const MAX_PAGE_SIZE = 50;
 
 const MODUL: readonly ModulLog[] = ["4", "7", "auth"];
 const AKSI: readonly AksiLog[] = ["tambah", "ubah", "hapus", "validasi", "sinkron", "login", "login_gagal"];
-const OBJEK: readonly ObjekLog[] = ["arsip", "kategori", "dosen", "sso", "buku"];
+const OBJEK: readonly ObjekLog[] = ["arsip", "kategori", "dosen", "sso", "buku", "kegiatan"];
 
 // Log dibaca orang di Indonesia, jadi batas hari pada filter tanggal memakai WIB (UTC+7, tanpa DST).
 const OFFSET_WIB = "+07:00";

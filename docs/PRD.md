@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.36. Berdasarkan ERD versi 6.
+Versi: 1.37. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,6 +43,7 @@ Versi: 1.36. Berdasarkan ERD versi 6.
 | 1.34  | 2026-11-24 | Pilihan filter akreditasi publikasi ditetapkan tetap: `Q1` sampai `Q4` (kolom `kuartil`, Scopus) dan `SINTA 1` sampai `SINTA 6` (kolom `akreditasi`, jurnal lokal), tidak dibaca dari database (5.9). Endpoint baru `GET /api/tridarma/opsi?untuk=` mengembalikan pilihan dropdown filter (combobox yang bisa diketik): tahun, skema, status, jenis, dan kategori dari data, akreditasi dan sumber_artikel tetap. Koleksi Bruno diperluas ke 50 request. |
 | 1.35  | 2026-11-24 | Keputusan terbuka nomor 22 ditambahkan: pencocokan nama untuk tautan publikasi, HKI, dan buku (12). Masih dibahas tim, belum ada perubahan kode atau skema. Aturan 5.3 dan 5.7 yang berlaku tetap: teks penulis tidak dicocokkan. |
 | 1.36  | 2026-11-24 | Cabang CRUD manual buku digabung dengan endpoint baca #17. `POST /api/tridarma/buku` serta `PATCH` dan `DELETE /api/tridarma/buku/[id]` berbagi file route dengan `GET` (5.9). Log aktivitas memakai `objek = buku` (6.4). Pembantu tulis modul 7 ada di `src/lib/tridarma.ts` (`requireTridarmaWriter`, `parseTridarmaJsonBody`, `parseTridarmaIdParam`), validasi buku di `src/lib/buku.ts`. Rincian aturan CRUD buku mengikuti 5.7 dan belum dirinci terpisah. |
+| 1.37  | 2026-11-24 | CRUD manual kegiatan (issue #19, 5.7): `POST /api/tridarma/kegiatan`, `PATCH` dan `DELETE /api/tridarma/kegiatan/[id]` untuk penelitian dan pengabdian. Peserta lewat satu kolom `tim`, dipecah menjadi baris `kegiatan_anggota` (nama pertama ketua), nama pengguna wajib ada di tim, pengguna yang belum sinkron ditolak, field `status` ditolak `400`, duplikat manual ditautkan otomatis. Log aktivitas memakai `objek = kegiatan` (6.4). Rincian di 5.7. |
 
 ---
 
@@ -245,6 +246,17 @@ Aturan hapus (berlaku untuk data `manual` dan `sinta`, keputusan 2026-11-23): se
 
 **Nilai `source` data manual.** Baris `publikasi_dosen` untuk data manual memakai `source = manual`, dan `urutan_penulis`, `total_penulis` dikosongkan. Enum `PublikasiSource` perlu nilai `manual` di migrasi Prisma.
 
+**Penerapan CRUD kegiatan (issue #19).** Route di `src/app/api/tridarma/kegiatan/` (satu file dengan `GET` dari 5.9), validasi dan pemecahan `tim` di `src/lib/kegiatan.ts` (fungsi murni), dan operasi database di `src/lib/kegiatan-tulis.ts`. Hak akses lewat `requireTridarmaWriter` (Dosen, Kaprodi, Staff Kaprodi, dengan baris `dosen`). Hasil tulis memakai bentuk item yang sama dengan `GET` (5.9), tanpa `kunci`.
+
+- **Tambah.** Wajib: `jenis` (`penelitian` atau `pengabdian`), `judul` (3 sampai 1000 karakter, minimal 2 huruf), `tahun` (1000 sampai 9999), dan `tim`. Opsional: `skema` (maksimal 255), `dana_nominal` (angka atau teks angka, 0 sampai 999999999999999, maksimal 2 desimal, kosong berarti 0), `sumber_dana` (maksimal 100). Alias camelCase `danaNominal` dan `sumberDana` juga diterima. `status` dibalas `400` "Kegiatan tidak memiliki field status." Field `peran_saya`, `ketua`, dan `anggota_lain` tidak ada dan diabaikan. `sumber = manual`, kunci dari `kunciKegiatan(jenis, judul, tahun)`. Dibalas `201`.
+- **`tim`.** Teks, nama dipisah `;`, maksimal 50 nama dan 200 karakter per nama, tiap nama minimal 2 huruf. Nama pertama ketua, sisanya anggota. Nama kembar (setelah `normNama`, jadi gelar dan huruf besar kecil tidak membedakan) digabung dengan posisi paling awal. Tiap `nama_normal` dicocokkan ke `dosen.nama_normal` hanya bila tepat satu dosen, selain itu `dosen_id` kosong. Baris milik pengguna selalu diberi `dosen_id` pengguna.
+- **Prasyarat pengguna.** Nama dosen dibaca dari `dosen.nama_normal` (atau dihitung dari `dosen.nama`). Bila kosong (belum pernah sinkron): `400` minta sinkron dulu. Nama pengguna tidak ada di `tim`: `400` "Nama kamu harus ada di daftar tim." Berlaku juga saat `PATCH` mengirim `tim`.
+- **Duplikat.** Kunci sama dengan data `manual` dan pengguna belum tertaut: tautkan otomatis, `200` dengan `data.ditautkan = true`, `id`, dan `judul`, isi kegiatan dan baris orang lain tidak berubah. Bila ada baris dengan `nama_normal` pengguna dan `dosen_id` kosong, `dosen_id`-nya diisi, bila tidak ada baris baru ditambah dengan `peran` dari posisi pengguna di `tim`. Data `sinta`, pengguna yang sudah tertaut, atau baris bernama sama yang sudah milik dosen lain: `409` "Kegiatan ini sudah ada di data."
+- **Ubah.** Hanya field yang dikirim berubah, minimal satu. Data yang tidak tertaut ke pengguna (tidak ada baris anggota dengan `dosen_id` pengguna): `403`, termasuk untuk Kaprodi dan Staff Kaprodi. Setiap perubahan berhasil menjadikan `sumber = manual`, juga bila yang diubah hanya `tim`. Kunci dihitung ulang dari nilai baru, bentrok dengan kegiatan lain: `409`.
+- **Ubah `tim`.** Nama baru ditambahkan, nama lama yang ada di tim diperbarui (nama, peran mengikuti posisi), dan nama tanpa `dosen_id` yang dikeluarkan dari tim dihapus. Baris dosen terdaftar lain (`dosen_id` terisi) tidak pernah dihapus lewat `PATCH`. Bila dosen lain itu tadinya ketua dan dikeluarkan dari tim, perannya turun menjadi anggota supaya tidak ada dua ketua. `dosen_id` yang sudah terisi tidak diubah. Semua perubahan satu transaksi.
+- **Hapus.** Baris anggota milik pengguna dihapus. Kegiatan ikut terhapus hanya bila tidak ada lagi anggota dengan `dosen_id` terisi (nama tanpa `dosen_id` tidak dihitung). Respons `200` dengan `data.data_dihapus`: `true` bila kegiatan terhapus, `false` bila hanya tautan pengguna yang dilepas. Satu transaksi.
+- **Log aktivitas.** `modul = 7`, `objek = kegiatan`, `aksi` tambah, ubah, atau hapus, `detail` berisi judul. Penautan otomatis dicatat sebagai `tambah`.
+
 ### 5.8 Hak akses di luar pengajaran (ringkasan)
 
 Ringkasan untuk pengecekan cepat, sumber utama tetap 5.6 dan 5.7.
@@ -384,7 +396,7 @@ Dosen boleh melihat Dashboard (diputuskan 2026-11-21, bagian 12 nomor 13).
 
 ### 6.4 Log aktivitas
 
-- `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (salinan nama, supaya log tetap terbaca bila user dihapus di SSO), `modul` (`4`, `7`, atau `auth`), `aksi` (tambah, ubah, hapus, validasi, sinkron, login, login_gagal), `objek` (arsip, kategori, dosen, sso, atau buku), `detail` (teks yang berisi pengenal, misalnya nomor arsip atau judul, serta alasan gagal login), `created_at`.
+- `log_aktivitas`: `user_id` (`sub` SSO), `user_nama` (salinan nama, supaya log tetap terbaca bila user dihapus di SSO), `modul` (`4`, `7`, atau `auth`), `aksi` (tambah, ubah, hapus, validasi, sinkron, login, login_gagal), `objek` (arsip, kategori, dosen, sso, buku, atau kegiatan), `detail` (teks yang berisi pengenal, misalnya nomor arsip atau judul, serta alasan gagal login), `created_at`.
 - Tidak ada `objek_id` dan `ip_address`.
 - Yang dicatat: tambah, ubah, hapus, dan validasi arsip; perubahan kategori; sinkron dosen (modul 7); login sukses dan gagal (modul auth).
 - Yang boleh melihat: Staff Kaprodi dan Kaprodi. Peran lain mendapat 403. Log hanya bisa dibaca lewat API, tidak bisa ditambah, diubah, atau dihapus dari luar.
@@ -677,6 +689,8 @@ sacibiru-modul/
 │  │  ├─ tridarma.ts              (konstanta modul 7: STATUS_IPRS_MANUAL, SUMBER_SINTA, SUMBER_MANUAL)
 │  │  ├─ kunci.ts                 (kunci anti-dobel dan normNama, padanan loader.py)
 │  │  ├─ buku.ts                  (validasi dan parsing tulis buku manual, CRUD buku)
+│  │  ├─ kegiatan.ts              (validasi tulis kegiatan, pemecahan tim, rencana perubahan anggota; fungsi murni)
+│  │  ├─ kegiatan-tulis.ts        (tambah, ubah, hapus kegiatan manual: tautan otomatis, transaksi, log)
 │  │  ├─ tridarma-baca.ts         (parameter, pagination, bisa_diubah, dan pembungkus respons endpoint baca)
 │  │  ├─ tridarma-data.ts         (query dan bentuk respons dosen, publikasi, kegiatan, iprs, buku)
 │  │  ├─ tridarma-opsi.ts         (pilihan dropdown filter: daftar tetap dan nilai unik dari data)
@@ -705,8 +719,8 @@ sacibiru-modul/
 │  └─ .env.example
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
 │  ├─ helpers/fixtures.ts
-│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci, sinkron, rbac-sinkron)
-│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas, sinkron, sinkron-status-health, tridarma-baca, tridarma-opsi: handler dengan database dan layanan crawler tiruan)
+│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci, sinkron, rbac-sinkron, kegiatan)
+│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas, sinkron, sinkron-status-health, tridarma-baca, tridarma-opsi, tridarma-kegiatan: handler dengan database dan layanan crawler tiruan)
 │  └─ proxy.test.ts               (penyegaran sesi dan dosen_id)
 ├─ bruno/                         (koleksi Bruno untuk menguji semua endpoint: login dev, sinkron, tridarma, arsip, layanan Python; buka lewat Open Collection)
 ├─ vitest.config.ts

@@ -11,7 +11,7 @@ export type AksiLog =
   | "login"
   | "login_gagal";
 
-export type ObjekLog = "arsip" | "kategori" | "dosen" | "sso" | "buku";
+export type ObjekLog = "arsip" | "kategori" | "dosen" | "sso" | "buku" | "kegiatan";
 
 export interface CatatLogInput {
   // Kosong untuk login gagal, karena belum ada akun yang teridentifikasi.
