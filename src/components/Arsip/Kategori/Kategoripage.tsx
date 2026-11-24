@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Eye, FolderOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import ConfirmDeleteDialog from "../ConfirmDeletedialog";
 
 export type KategoriArsip = {
   id: string | number;
@@ -33,6 +36,7 @@ export interface KategoriArsipPageProps {
   onAdd?: () => void;
   onView?: (item: KategoriArsip) => void;
   onEdit?: (item: KategoriArsip) => void;
+  /** Dipanggil setelah kategori berhasil dihapus. */
   onDelete?: (item: KategoriArsip) => void;
   className?: string;
 }
@@ -86,6 +90,7 @@ export function KategoriArsipPage({
   onDelete,
   className,
 }: KategoriArsipPageProps) {
+  const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [kategoriData, setKategoriData] = React.useState<KategoriArsip[]>(
     data ?? [],
@@ -93,6 +98,14 @@ export function KategoriArsipPage({
   const [totalData, setTotalData] = React.useState(totalItems ?? 0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+
+  // Hapus kategori
+  const [deleteTarget, setDeleteTarget] = React.useState<KategoriArsip | null>(
+    null,
+  );
+  const [deleting, setDeleting] = React.useState(false);
+  // Dinaikkan setelah hapus supaya data dimuat ulang
+  const [reloadKey, setReloadKey] = React.useState(0);
 
   // Halaman aktif: pakai props kalau dikontrol dari luar, kalau tidak pakai state sendiri
   const [internalPage, setInternalPage] = React.useState(1);
@@ -168,7 +181,53 @@ export function KategoriArsipPage({
     fetchKategori();
 
     return () => controller.abort();
-  }, [data, totalItems, page, pageSize]);
+  }, [data, totalItems, page, pageSize, reloadKey]);
+
+  async function confirmDelete() {
+    if (!deleteTarget || deleting) return;
+    const target = deleteTarget;
+    setDeleting(true);
+
+    try {
+      const res = await fetch(
+        `/api/arsip/kategori/${encodeURIComponent(String(target.id))}`,
+        { method: "DELETE" },
+      );
+      const result = (await res.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (!res.ok) {
+        toast.error("Kategori gagal dihapus", {
+          description:
+            result?.message ?? "Terjadi kesalahan saat menghapus kategori.",
+        });
+        return;
+      }
+
+      toast.success("Kategori berhasil dihapus", {
+        description: result?.message ?? `"${target.nama}" telah dihapus.`,
+      });
+      onDelete?.(target);
+
+      if (data !== undefined) {
+        // Data dikirim dari luar (server component): minta server ambil ulang
+        router.refresh();
+      } else if (kategoriData.length === 1 && page > 1) {
+        // Item terakhir di halaman ini terhapus: mundur satu halaman
+        handlePageChange(page - 1);
+      } else {
+        setReloadKey((k) => k + 1);
+      }
+    } catch {
+      toast.error("Kategori gagal dihapus", {
+        description: "Tidak dapat terhubung ke server. Coba lagi.",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -210,7 +269,7 @@ export function KategoriArsipPage({
       {/* Search bar */}
       <div className="rounded-xl bg-white p-4 shadow-[0_1px_1px_rgba(0,0,0,0.05)]">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-[15px] -translate-y-1/2 text-[#757684]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.75 -translate-y-1/2 text-[#757684]" />
 
           <Input
             value={query}
@@ -296,7 +355,7 @@ export function KategoriArsipPage({
                   className="border-t border-[#eaedff] hover:bg-[#f2f3ff]/40"
                 >
                   <TableCell className="px-6 py-6">
-                    <span className="inline-flex rounded bg-[#e2e7ff] px-2.5 py-px font-mono text-[13px] font-bold leading-[22px] text-[#00288e]">
+                    <span className="inline-flex rounded bg-[#e2e7ff] px-2.5 py-px font-mono text-[13px] font-bold leading-5.5 text-[#00288e]">
                       {item.kode}
                     </span>
                   </TableCell>
@@ -317,7 +376,7 @@ export function KategoriArsipPage({
                         size="icon"
                         aria-label={`Lihat ${item.nama}`}
                         onClick={() => onView?.(item)}
-                        className="size-[27px] rounded-lg text-[#0101b7] hover:bg-[#e2e7ff] hover:text-[#0101b7]"
+                        className="size-6.75 rounded-lg text-[#0101b7] hover:bg-[#e2e7ff] hover:text-[#0101b7]"
                       >
                         <Eye className="size-5" />
                       </Button>
@@ -327,17 +386,18 @@ export function KategoriArsipPage({
                         size="icon"
                         aria-label={`Edit ${item.nama}`}
                         onClick={() => onEdit?.(item)}
-                        className="size-[27px] rounded-lg text-[#757684] hover:bg-[#e2e7ff] hover:text-[#444653]"
+                        className="size-6.75 rounded-lg text-[#757684] hover:bg-[#e2e7ff] hover:text-[#444653]"
                       >
                         <Pencil className="size-4" />
                       </Button>
 
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         aria-label={`Hapus ${item.nama}`}
-                        onClick={() => onDelete?.(item)}
-                        className="size-[27px] rounded-lg text-[#ba1a1a] hover:bg-[#ba1a1a]/10 hover:text-[#ba1a1a]"
+                        onClick={() => setDeleteTarget(item)}
+                        className="size-6.75 rounded-lg text-[#ba1a1a] hover:bg-[#ba1a1a]/10 hover:text-[#ba1a1a]"
                       >
                         <Trash2 className="size-4" />
                       </Button>
@@ -351,7 +411,7 @@ export function KategoriArsipPage({
 
         {/* Pagination */}
         <div className="flex items-center justify-between border-t border-[#eaedff] bg-[#f2f3ff]/40 px-6 py-4">
-          <p className="text-[13px] leading-[18px] text-[#444653]">
+          <p className="text-[13px] leading-4.5 text-[#444653]">
             Menampilkan{" "}
             <span className="text-xs font-semibold tracking-[0.24px] text-[#131b2e]">
               {from} - {to}
@@ -411,6 +471,18 @@ export function KategoriArsipPage({
           </nav>
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={deleteTarget !== null}
+        loading={deleting}
+        message={
+          deleteTarget
+            ? `Apakah Anda yakin untuk menghapus kategori "${deleteTarget.nama}"?`
+            : undefined
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

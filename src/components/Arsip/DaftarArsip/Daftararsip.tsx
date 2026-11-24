@@ -4,10 +4,9 @@ import { redirect } from "next/navigation";
 import {
   Calendar,
   ChevronDown,
-  Download,
   Eye,
+  Pencil,
   Plus,
-  Printer,
   RotateCcw,
   Search,
   Table2,
@@ -29,6 +28,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import ExportExcelButton from "./exportexcelbutton";
+import PrintButton from "./Printbutton";
+import DeleteArsipButton from "../DeleteArsipButton";
 
 /* ---------- Konfigurasi ---------- */
 
@@ -196,11 +198,11 @@ function FilterBar({
       action={BASE_PATH}
       className="rounded-xl bg-white p-4 shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
     >
-      <div className="grid grid-cols-12 items-center gap-x-[15px] gap-y-3">
+      <div className="grid grid-cols-12 items-center gap-x-3.75 gap-y-3">
         {/* Search */}
         <div className="relative col-span-12 md:col-span-5">
           <Search
-            className="pointer-events-none absolute left-[14px] top-1/2 size-[15px] -translate-y-1/2 text-[#757684]"
+            className="pointer-events-none absolute left-3.5 top-1/2 size-3.75 -translate-y-1/2 text-[#757684]"
             aria-hidden
           />
           <input
@@ -229,7 +231,7 @@ function FilterBar({
             ))}
           </select>
           <ChevronDown
-            className="pointer-events-none absolute right-[10px] top-1/2 size-[9px] -translate-y-1/2 text-[#444653]"
+            className="pointer-events-none absolute right-2.5 top-1/2 size-2.25 -translate-y-1/2 text-[#444653]"
             aria-hidden
           />
         </div>
@@ -250,7 +252,7 @@ function FilterBar({
             ))}
           </select>
           <Calendar
-            className="pointer-events-none absolute right-[10px] top-1/2 size-[14px] -translate-y-1/2 text-[#444653]"
+            className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#444653]"
             aria-hidden
           />
         </div>
@@ -297,31 +299,19 @@ function TabelArsip({
       {/* Subheader */}
       <div className="flex items-center justify-between bg-[#f2f3ff] px-4 py-3">
         <div className="flex items-center gap-2">
-          <Table2 className="size-[14px] text-[#00288e]" aria-hidden />
+          <Table2 className="size-3.5 text-[#00288e]" aria-hidden />
           <h2 className="text-base font-bold leading-6 text-[#131b2e]">
             Data Rekapitulasi Berkas Arsip
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded bg-[#eaedff] px-2.5 py-1 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653] hover:bg-[#dde1ff]"
-          >
-            <Download className="size-2.5" aria-hidden />
-            Ekspor Excel
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded bg-[#eaedff] px-2.5 py-1 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653] hover:bg-[#dde1ff]"
-          >
-            <Printer className="size-3" aria-hidden />
-            Cetak
-          </button>
+          <ExportExcelButton rows={rows} />
+          <PrintButton rows={rows} page={page} total={total} />
         </div>
       </div>
 
       {/* Tabel */}
-      <Table className="min-w-[960px]">
+      <Table className="min-w-240">
         <TableHeader className="bg-[#f2f3ff] [&_tr]:border-0">
           <TableRow className="border-0 hover:bg-transparent">
             {[
@@ -334,10 +324,10 @@ function TabelArsip({
               <TableHead
                 key={h}
                 className={cn(
-                  "h-auto px-4 py-[22px] text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
-                  i === 0 && "w-[400px] pr-6",
-                  i === 3 && "w-[110px] whitespace-normal py-3.5",
-                  i === 4 && "w-[148px] pr-6 text-right"
+                  "h-auto px-4 py-5.5 text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
+                  i === 0 && "w-100 pr-6",
+                  i === 3 && "w-27.5 whitespace-normal py-3.5",
+                  i === 4 && "w-40 pr-6 text-right"
                 )}
               >
                 {h}
@@ -359,14 +349,14 @@ function TabelArsip({
           {rows.map((row) => {
             const style = kategoriStyle[row.kategori] ?? defaultStyle;
             return (
-              <TableRow key={row.id} className="h-[60px] border-0">
+              <TableRow key={row.id} className="h-15 border-0">
                 <TableCell className="whitespace-normal py-5 pr-6 text-sm font-semibold leading-5 text-black">
                   {row.judul}
                 </TableCell>
                 <TableCell className="px-4">
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-[14px] tracking-[0.44px]",
+                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
                       style.badge
                     )}
                   >
@@ -383,19 +373,30 @@ function TabelArsip({
                   </p>
                 </TableCell>
                 <TableCell className="px-6">
-                  <div className="flex items-center justify-end">
-                    <Link
-                      href={`/arsip/${row.id}`}
-                      aria-label={`Lihat ${row.judul}`}
-                      className={cn(
-                        buttonVariants({ variant: "ghost", size: "icon" }),
-                        "size-8 text-[#00288e] hover:bg-[#e2e7ff]"
-                      )}
-                    >
-                      <Eye className="size-5" />
-                    </Link>
-                  </div>
-                </TableCell>
+  <div className="flex items-center justify-end gap-1">
+    <Link
+      href={`/arsip/${row.id}`}
+      aria-label={`Lihat ${row.judul}`}
+      className={cn(
+        buttonVariants({ variant: "ghost", size: "icon" }),
+        "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
+      )}
+    >
+      <Eye className="size-4" />
+    </Link>
+    <Link
+  href={`/arsip/daftar/${row.id}/edit`}
+  aria-label={`Ubah ${row.judul}`}
+      className={cn(
+        buttonVariants({ variant: "ghost", size: "icon" }),
+        "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
+      )}
+    >
+      <Pencil className="size-4" />
+    </Link>
+    <DeleteArsipButton id={row.id} judul={row.judul} />
+  </div>
+</TableCell>
               </TableRow>
             );
           })}
@@ -404,19 +405,19 @@ function TabelArsip({
 
       {/* Pagination */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f2f3ff]/70 px-4 py-3.5">
-        <p className="text-[13px] leading-[18px] text-[#444653]">
+        <p className="text-[13px] leading-4.5 text-[#444653]">
           Menampilkan {from}–{to} dari {total} arsip
         </p>
         <nav aria-label="Halaman" className="flex items-center gap-1">
           {page > 1 ? (
             <Link
               href={buildHref(sp, page - 1)}
-              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
+              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
             >
               ‹ Sebelumnya
             </Link>
           ) : (
-            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#757684] opacity-50">
+            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#757684] opacity-50">
               ‹ Sebelumnya
             </span>
           )}
@@ -451,12 +452,12 @@ function TabelArsip({
           {page < totalPages ? (
             <Link
               href={buildHref(sp, page + 1)}
-              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
+              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
             >
               Selanjutnya ›
             </Link>
           ) : (
-            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#757684] opacity-50">
+            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#757684] opacity-50">
               Selanjutnya ›
             </span>
           )}
@@ -496,8 +497,8 @@ async function DaftarArsipContent({
 function DaftarArsipSkeleton() {
   return (
     <>
-      <div className="h-[72px] animate-pulse rounded-xl bg-white" />
-      <div className="h-[520px] animate-pulse rounded-xl bg-white" />
+      <div className="h-18 animate-pulse rounded-xl bg-white" />
+      <div className="h-130 animate-pulse rounded-xl bg-white" />
     </>
   );
 }
@@ -510,7 +511,7 @@ export default function DaftarArsipPage({
   searchParams: Promise<SearchParams>;
 }) {
   return (
-    <div className="flex flex-col gap-4 pb-6 font-[family-name:var(--font-plus-jakarta)]">
+    <div className="flex flex-col gap-4 pb-6 font-(family-name:--font-plus-jakarta)">
       <PageHeader />
       <div className="flex flex-col gap-6 px-6">
         <Suspense fallback={<DaftarArsipSkeleton />}>

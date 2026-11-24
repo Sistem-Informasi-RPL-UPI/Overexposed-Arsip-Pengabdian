@@ -9,7 +9,6 @@ import {
   Pencil,
   Plus,
   ShieldCheck,
-  Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -27,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import DeleteArsipButton from "../DeleteArsipButton";
 
 /* ---------- Data ---------- */
 
@@ -76,7 +76,7 @@ async function getDashboardData(): Promise<{ rows: Row[]; total: number }> {
   if (!auth.ok) redirect(auth.response.status === 401 ? "/login" : "/");
 
   const parsed = parseArsipListFilters(
-    new URLSearchParams({ page: "1", limit: String(JUMLAH_AKTIVITAS) })
+    new URLSearchParams({ page: "1", pageSize: String(JUMLAH_AKTIVITAS) }),
   );
   if (!parsed.ok) return { rows: [], total: 0 };
 
@@ -86,20 +86,19 @@ async function getDashboardData(): Promise<{ rows: Row[]; total: number }> {
 
 /* ---------- Sub-komponen ---------- */
 
-
 function Banner() {
   return (
-    <section className="relative flex w-full flex-col overflow-hidden rounded-xl bg-gradient-to-r from-[#00288e] via-[#1e40af] to-[#006591] p-6 shadow-md">
+    <section className="relative flex w-full flex-col overflow-hidden rounded-xl bg-linear-to-r from-[#00288e] via-[#1e40af] to-[#006591] p-6 shadow-md">
       <div
         aria-hidden
-        className="absolute -bottom-10 -right-10 size-64 rounded-full bg-[#39b8fd]/20 blur-[64px]"
+        className="absolute -bottom-10 -right-10 size-64 rounded-full bg-[#39b8fd]/20 blur-3xl"
       />
       <div className="relative max-w-3xl">
         <div className="flex items-center gap-2">
           <h1 className="text-[28px] font-bold leading-9 tracking-[-0.7px] text-white">
             Dashboard Arsip
           </h1>
-          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold leading-[14px] tracking-[0.275px] text-white backdrop-blur-sm">
+          <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold leading-3.5 tracking-[0.275px] text-white backdrop-blur-sm">
             SI RPL UPI
           </span>
         </div>
@@ -136,7 +135,7 @@ function StatCard({ total }: { total: number }) {
           </h2>
         </div>
         <p className="flex items-baseline gap-2 py-4">
-          <span className="text-4xl font-bold leading-[44px] tracking-[-0.9px] text-[#00288e]">
+          <span className="text-4xl font-bold leading-11 tracking-[-0.9px] text-[#00288e]">
             {total}
           </span>
           <span className="text-xl font-medium leading-7 tracking-[-0.2px] text-[#444653]">
@@ -157,7 +156,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
           <h2 className="text-xl font-semibold leading-7 tracking-[-0.2px] text-[#131b2e]">
             Aktivitas Terbaru
           </h2>
-          <p className="text-[13px] leading-[18px] text-[#444653]">
+          <p className="text-[13px] leading-4.5 text-[#444653]">
             Riwayat arsip dan berkas yang baru saja ditambahkan atau diperbarui
             oleh staf prodi
           </p>
@@ -167,17 +166,17 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
             href="/arsip/daftar"
             className={cn(
               buttonVariants({ variant: "ghost" }),
-              "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]"
+              "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]",
             )}
           >
             Lihat Seluruh Arsip
             <ArrowRight className="size-3" aria-hidden />
           </Link>
           <Link
-            href="/arsip/tambah"
+            href="/arsip/daftar/formulir"
             className={cn(
               buttonVariants(),
-              "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]"
+              "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]",
             )}
           >
             <Plus className="size-3" aria-hidden />
@@ -187,7 +186,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
       </div>
 
       {/* Tabel */}
-      <Table className="min-w-[960px]">
+      <Table className="min-w-240">
         <TableHeader className="bg-[#f2f3ff] [&_tr]:border-0">
           <TableRow className="border-0 hover:bg-transparent">
             {[
@@ -200,10 +199,10 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
               <TableHead
                 key={h}
                 className={cn(
-                  "h-auto px-4 py-[22px] text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
-                  i === 0 && "w-[400px] pl-8",
-                  i === 3 && "w-[140px] whitespace-normal py-3.5",
-                  i === 4 && "pr-6 text-right"
+                  "h-auto px-4 py-5.5 text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
+                  i === 0 && "w-100 pl-8",
+                  i === 3 && "w-35 whitespace-normal py-3.5",
+                  i === 4 && "pr-6 text-right",
                 )}
               >
                 {h}
@@ -226,15 +225,15 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
           {rows.map((row) => {
             const style = kategoriStyle[row.kategori] ?? defaultStyle;
             return (
-              <TableRow key={row.id} className="h-[77px] border-0">
+              <TableRow key={row.id} className="h-19.25 border-0">
                 <TableCell className="whitespace-normal py-5 pl-8 pr-6 text-sm font-semibold leading-5 text-black">
                   {row.judul}
                 </TableCell>
                 <TableCell className="px-4">
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-[14px] tracking-[0.44px]",
-                      style.badge
+                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
+                      style.badge,
                     )}
                   >
                     <span className={cn("size-1.5 rounded-full", style.dot)} />
@@ -255,7 +254,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
                       variant="ghost"
                       size="icon"
                       aria-label={`Lihat ${row.judul}`}
-                      className="size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
+                      className="size-6.75 text-[#00288e] hover:bg-[#e2e7ff]"
                     >
                       <Eye className="size-4" />
                     </Button>
@@ -263,18 +262,11 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
                       variant="ghost"
                       size="icon"
                       aria-label={`Ubah ${row.judul}`}
-                      className="size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
+                      className="size-6.75 text-[#00288e] hover:bg-[#e2e7ff]"
                     >
                       <Pencil className="size-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Hapus ${row.judul}`}
-                      className="size-[27px] text-[#ba1a1a] hover:bg-red-50"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <DeleteArsipButton id={row.id} judul={row.judul} />
                   </div>
                 </TableCell>
               </TableRow>
@@ -285,7 +277,7 @@ function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
 
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f2f3ff]/70 p-4">
-        <p className="text-[13px] leading-[18px] text-[#444653]">
+        <p className="text-[13px] leading-4.5 text-[#444653]">
           Menampilkan {rows.length} aktivitas berkas terbaru dari keseluruhan
           arsip.
         </p>
@@ -317,8 +309,8 @@ async function DashboardData() {
 function DashboardDataSkeleton() {
   return (
     <>
-      <div className="h-[200px] animate-pulse rounded-xl bg-white lg:w-5/12" />
-      <div className="h-[520px] animate-pulse rounded-xl bg-white" />
+      <div className="h-50 animate-pulse rounded-xl bg-white lg:w-5/12" />
+      <div className="h-130 animate-pulse rounded-xl bg-white" />
     </>
   );
 }
@@ -327,7 +319,7 @@ function DashboardDataSkeleton() {
 
 export default function DashboardPage() {
   return (
-    <div className="flex flex-col gap-2 font-[family-name:var(--font-plus-jakarta)]">
+    <div className="flex flex-col gap-2 bg-gray-100 font-(family-name:--font-plus-jakarta)">
       <div className="flex flex-col gap-6 px-6 pb-6">
         <Banner />
         <Suspense fallback={<DashboardDataSkeleton />}>

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -12,16 +13,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  CheckCircle2,
   ChevronDown,
+  CloudUpload,
+  Eye,
+  FileImage,
+  FilePlus2,
+  FileSpreadsheet,
   FileText,
   Info,
   Lock,
   Paperclip,
   Send,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import ConfirmDeleteDialog from "../ConfirmDeletedialog";
 
 /* ---------- Tipe ---------- */
 
@@ -33,15 +42,17 @@ export type KategoriOption = {
   retensiInaktif: number;
 };
 
-type Values = {
+export type Values = {
   judul: string;
   kategoriId: string;
   tanggalArsip: string;
   nomorArsip: string;
   nomorSurat: string;
   keterangan: string;
-  linkBerkas: string;
 };
+
+/** Berkas yang sudah tersimpan di server (hanya dipakai saat mode edit) */
+export type ExistingFile = { name: string; url?: string } | null;
 
 const INITIAL: Values = {
   judul: "",
@@ -50,10 +61,15 @@ const INITIAL: Values = {
   nomorArsip: "",
   nomorSurat: "",
   keterangan: "",
-  linkBerkas: "",
 };
 
 const DAFTAR_PATH = "/arsip/daftar";
+
+/* Pengaturan upload berkas */
+const ALLOWED_EXT = ["pdf", "docx", "xlsx", "jpg", "jpeg"];
+const ACCEPT_ATTR = ".pdf,.docx,.xlsx,.jpg,.jpeg";
+const MAX_SIZE_MB = 25;
+const PREVIEWABLE_EXT = ["pdf", "jpg", "jpeg"];
 
 /* ---------- Style bersama ---------- */
 
@@ -62,6 +78,30 @@ const inputClass =
 
 const readonlyClass =
   "flex h-11 w-full items-center rounded-lg bg-[#eaedff] pl-4 pr-10 text-sm text-[#131b2e] shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+
+/* ---------- Helper ---------- */
+
+function getExt(name: string) {
+  return name.split(".").pop()?.toLowerCase() ?? "";
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function fileVisual(ext: string) {
+  switch (ext) {
+    case "pdf":
+      return { Icon: FileText, box: "bg-[#ffdad6] text-[#ba1a1a]" };
+    case "docx":
+      return { Icon: FileText, box: "bg-[#dde1ff] text-[#1e40af]" };
+    case "xlsx":
+      return { Icon: FileSpreadsheet, box: "bg-[#d6f5e0] text-[#1b7a3d]" };
+    default:
+      return { Icon: FileImage, box: "bg-[#ffe8c2] text-[#9a5b00]" };
+  }
+}
 
 /* ---------- Sub-komponen ---------- */
 
@@ -98,12 +138,12 @@ function Field({
       {children}
       {hint &&
         (hintStyle === "info" ? (
-          <p className="flex items-center gap-1 text-[13px] leading-[18px] text-[#444653]">
-            <Info className="size-[13px] shrink-0" aria-hidden />
+          <p className="flex items-center gap-1 text-[13px] leading-4.5 text-[#444653]">
+            <Info className="size-3.25 shrink-0" aria-hidden />
             {hint}
           </p>
         ) : (
-          <p className="text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653]">
+          <p className="text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#444653]">
             {hint}
           </p>
         ))}
@@ -152,17 +192,287 @@ function RetensiField({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FileUploader({
+  id,
+  name,
+  file,
+  onChange,
+  existingFile = null,
+}: {
+  id: string;
+  name: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  existingFile?: ExistingFile;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  function openPicker() {
+    inputRef.current?.click();
+  }
+
+  function handleFile(f?: File | null) {
+    if (!f) return;
+    if (!ALLOWED_EXT.includes(getExt(f.name))) {
+      setFileError(
+        "Format berkas tidak didukung. Gunakan PDF, DOCX, XLSX, atau JPG.",
+      );
+      return;
+    }
+    if (f.size > MAX_SIZE_MB * 1024 * 1024) {
+      setFileError(`Ukuran berkas melebihi ${MAX_SIZE_MB} MB.`);
+      return;
+    }
+    setFileError(null);
+    onChange(f);
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragging(false);
+    handleFile(e.dataTransfer.files?.[0]);
+  }
+
+  function onDragLeave(e: DragEvent<HTMLDivElement>) {
+    // abaikan event saat kursor berpindah ke elemen anak
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setDragging(false);
+  }
+
+  function onPreview() {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    window.open(url, "_blank", "noopener,noreferrer");
+    // beri waktu tab baru memuat berkas sebelum URL dilepas
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  const ext = file ? getExt(file.name) : "";
+  const canPreview = PREVIEWABLE_EXT.includes(ext);
+  const { Icon: FileIcon, box } = fileVisual(ext);
+
+  const existingExt = existingFile ? getExt(existingFile.name) : "";
+  const { Icon: ExistingIcon, box: existingBox } = fileVisual(existingExt);
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Dropzone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={cn(
+          "flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors",
+          dragging
+            ? "border-[#1e40af] bg-[#dde1ff]"
+            : "border-transparent bg-[#f2f3ff]",
+        )}
+      >
+        <div className="flex size-16 items-center justify-center rounded-full bg-white text-[#1e40af] shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+          <CloudUpload className="size-8" aria-hidden />
+        </div>
+
+        <div className="flex max-w-md flex-col gap-1">
+          <p className="text-base font-semibold text-[#131b2e]">
+            Tarik dan lepas dokumen ke sini, atau klik tombol di bawah
+          </p>
+          <p className="text-[13px] leading-4.5 text-[#444653]">
+            Pastikan naskah telah dipindai (scan) dalam resolusi yang memadai
+            dengan cap dinas yang terbaca jelas.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={openPicker}
+          className="flex h-11 items-center gap-2 rounded-md bg-[#1e40af] px-6 text-sm font-semibold text-white shadow-md hover:bg-[#1e3a9f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e40af]/40 focus-visible:ring-offset-2"
+        >
+          <FilePlus2 className="size-4" aria-hidden />
+          {existingFile ? "Pilih Berkas Pengganti" : "Pilih File dari Perangkat"}
+        </button>
+
+        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-[#444653]">
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="size-3" aria-hidden />
+            Format: PDF, DOCX, XLSX, JPG
+          </span>
+          <span aria-hidden>•</span>
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="size-3" aria-hidden />
+            Maksimal {MAX_SIZE_MB} MB per dokumen
+          </span>
+        </p>
+
+        <input
+          ref={inputRef}
+          id={id}
+          name={name}
+          type="file"
+          aria-label="Pilih berkas arsip"
+          accept={ACCEPT_ATTR}
+          className="sr-only"
+          tabIndex={-1}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            handleFile(e.target.files?.[0]);
+            e.target.value = ""; // supaya berkas yang sama bisa dipilih ulang
+          }}
+        />
+      </div>
+
+      {fileError && (
+        <p
+          role="alert"
+          className="-mt-3 flex items-center gap-1 text-[13px] font-semibold text-[#ba1a1a]"
+        >
+          <Info className="size-3.25 shrink-0" aria-hidden />
+          {fileError}
+        </p>
+      )}
+
+      {/* Berkas lama (mode edit, selama belum dipilih berkas baru) */}
+      {!file && existingFile && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold uppercase leading-4 tracking-[0.48px] text-[#444653]">
+            Berkas Saat Ini
+          </h3>
+
+          <div className="flex flex-col gap-4 rounded-xl bg-[#eaedff] p-4 sm:flex-row sm:items-center">
+            <div
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                existingBox,
+              )}
+            >
+              <ExistingIcon className="size-5" aria-hidden />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[#131b2e]">
+                {existingFile.name}
+              </p>
+              <p className="text-xs text-[#444653]">
+                Pilih berkas baru di atas jika ingin menggantinya.
+              </p>
+            </div>
+
+            {existingFile.url && (
+              <a
+                href={existingFile.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex h-9 shrink-0 items-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#131b2e] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#f2f3ff]"
+              >
+                <Eye className="size-4" aria-hidden />
+                Lihat Berkas
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Berkas baru yang dipilih */}
+      {file && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-xs font-semibold uppercase leading-4 tracking-[0.48px] text-[#444653]">
+            {existingFile ? "Berkas Pengganti (1 File)" : "Berkas Terlampir (1 File)"}
+          </h3>
+
+          <div className="flex flex-col gap-4 rounded-xl bg-[#eaedff] p-4 sm:flex-row sm:items-center">
+            <div
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                box,
+              )}
+            >
+              <FileIcon className="size-5" aria-hidden />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[#131b2e]">
+                {file.name}
+              </p>
+              <p className="flex items-center gap-2 text-xs text-[#444653]">
+                <span className="font-semibold">{formatSize(file.size)}</span>
+                <span aria-hidden>•</span>
+                <span className="flex items-center gap-1 font-semibold text-[#0b6b2f]">
+                  <CheckCircle2 className="size-3" aria-hidden />
+                  Siap Diunggah
+                </span>
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={onPreview}
+                disabled={!canPreview}
+                title={
+                  canPreview
+                    ? undefined
+                    : "Pratinjau hanya tersedia untuk PDF dan JPG"
+                }
+                className="flex h-9 items-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#131b2e] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#f2f3ff] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Eye className="size-4" aria-hidden />
+                Lihat Pratinjau
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                className="flex h-9 items-center gap-2 rounded-md bg-white px-3 text-[13px] font-semibold text-[#ba1a1a] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#ffdad6]"
+              >
+                <Trash2 className="size-4" aria-hidden />
+                Hapus / Ganti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          onChange(null);
+          setFileError(null);
+          setConfirmOpen(false);
+        }}
+      />
+    </div>
+  );
+}
+
 /* ---------- Form ---------- */
 
 export default function FormulirArsipForm({
   kategori,
   penciptaUnit,
+  mode = "create",
+  arsipId,
+  initialValues,
+  existingFile = null,
 }: {
   kategori: KategoriOption[];
   penciptaUnit: string;
+  mode?: "create" | "edit";
+  arsipId?: string;
+  initialValues?: Values;
+  existingFile?: ExistingFile;
 }) {
+  const isEdit = mode === "edit";
   const router = useRouter();
-  const [v, setV] = useState<Values>(INITIAL);
+  const [v, setV] = useState<Values>(initialValues ?? INITIAL);
+  const [berkas, setBerkas] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -176,7 +486,7 @@ export default function FormulirArsipForm({
     (
       e: ChangeEvent<
         HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >
+      >,
     ) =>
       setV((prev) => ({ ...prev, [key]: e.target.value }));
 
@@ -201,21 +511,34 @@ export default function FormulirArsipForm({
     e.preventDefault();
     if (submitting) return;
     setError(null);
+
+    // Tambah: berkas wajib. Edit: wajib hanya jika belum ada berkas lama.
+    if (!berkas && !(isEdit && existingFile)) {
+      setError("Berkas arsip wajib diunggah.");
+      return;
+    }
+
+    if (isEdit && !arsipId) {
+      setError("ID arsip tidak ditemukan.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/arsip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nomorArsip: v.nomorArsip,
-          nomorSurat: v.nomorSurat,
-          judul: v.judul,
-          kategoriId: Number(v.kategoriId),
-          tanggalArsip: v.tanggalArsip,
-          linkBerkas: v.linkBerkas,
-          keterangan: v.keterangan,
-        }),
+      const fd = new FormData();
+      fd.append("nomorArsip", v.nomorArsip);
+      fd.append("nomorSurat", v.nomorSurat);
+      fd.append("judul", v.judul);
+      fd.append("kategoriId", v.kategoriId);
+      fd.append("tanggalArsip", v.tanggalArsip);
+      fd.append("keterangan", v.keterangan);
+      if (berkas) fd.append("berkas", berkas); // saat edit, berkas opsional
+
+      // Jangan set Content-Type manual; browser akan mengisi boundary multipart
+      const res = await fetch(isEdit ? `/api/arsip/${arsipId}` : "/api/arsip", {
+        method: isEdit ? "PATCH" : "POST",
+        body: fd,
       });
       const data = (await res.json().catch(() => null)) as {
         message?: string;
@@ -230,13 +553,15 @@ export default function FormulirArsipForm({
       router.push(DAFTAR_PATH);
       router.refresh();
     } catch {
-      setError("Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.");
+      setError(
+        "Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.",
+      );
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-6">
+    <form onSubmit={onSubmit} className="flex flex-col gap-6 px-6 py-6">
       {error && (
         <div
           ref={errorRef}
@@ -250,7 +575,7 @@ export default function FormulirArsipForm({
 
       {/* Card 1: Informasi utama */}
       <SectionCard
-        icon={<FileText className="size-[18px]" aria-hidden />}
+        icon={<FileText className="size-4.5" aria-hidden />}
         title="Informasi Utama Arsip"
       >
         <Field
@@ -298,7 +623,7 @@ export default function FormulirArsipForm({
                 ))}
               </select>
               <ChevronDown
-                className="pointer-events-none absolute right-3 top-1/2 size-[10px] -translate-y-1/2 text-[#444653]"
+                className="pointer-events-none absolute right-3 top-1/2 size-2.5 -translate-y-1/2 text-[#444653]"
                 aria-hidden
               />
             </div>
@@ -370,7 +695,10 @@ export default function FormulirArsipForm({
               type="text"
               readOnly
               value={penciptaUnit}
-              className={cn(readonlyClass, "outline-none")}
+              className={cn(
+                readonlyClass,
+                "outline-none pointer-events-none cursor-not-allowed",
+              )}
             />
             <Lock
               className="pointer-events-none absolute right-3 top-3.5 size-3 text-[#444653]"
@@ -397,7 +725,7 @@ export default function FormulirArsipForm({
             <RetensiField label="Retensi Aktif" value={retensiAktifText} />
             <RetensiField label="Retensi Inaktif" value={retensiInaktifText} />
           </div>
-          <p className="flex items-center gap-1 text-[13px] leading-[18px] text-[#444653]">
+          <p className="flex items-center gap-1 text-[13px] leading-4.5 text-[#444653]">
             <Sparkles className="size-3.5 shrink-0" aria-hidden />
             Informasi retensi aktif dan inaktif otomatis disesuaikan secara
             dinamis berdasarkan kategori klasifikasi yang dipilih.
@@ -407,27 +735,16 @@ export default function FormulirArsipForm({
 
       {/* Card 2: Berkas digital */}
       <SectionCard
-        icon={<Paperclip className="size-[18px]" aria-hidden />}
+        icon={<Paperclip className="size-4.5" aria-hidden />}
         title="Berkas Digital Arsip"
       >
-        <Field
-          label="Link Berkas"
-          required
-          htmlFor="linkBerkas"
-          hint="Tempel tautan berkas hasil pindai (Google Drive, OneDrive, dsb.) yang dapat dibuka, berawalan https://"
-          hintStyle="info"
-        >
-          <input
-            id="linkBerkas"
-            name="linkBerkas"
-            type="url"
-            required
-            value={v.linkBerkas}
-            onChange={set("linkBerkas")}
-            placeholder="https://drive.google.com/..."
-            className={inputClass}
-          />
-        </Field>
+        <FileUploader
+          id="berkas"
+          name="berkas"
+          file={berkas}
+          onChange={setBerkas}
+          existingFile={isEdit ? existingFile : null}
+        />
       </SectionCard>
 
       {/* Action bar */}
@@ -445,7 +762,11 @@ export default function FormulirArsipForm({
           disabled={submitting}
           className="flex h-10 items-center gap-2 rounded-md bg-[#1e40af] px-5 text-sm font-semibold text-white shadow-md hover:bg-[#1e3a9f] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? "Menyimpan..." : "Simpan Arsip"}
+          {submitting
+            ? "Menyimpan..."
+            : isEdit
+              ? "Simpan Perubahan"
+              : "Simpan Arsip"}
           <Send className="size-3.5" aria-hidden />
         </button>
       </div>

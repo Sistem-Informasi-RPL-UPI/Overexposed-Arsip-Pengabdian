@@ -77,7 +77,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-[60px] w-full items-center gap-3 rounded-xl px-4 text-lg transition-colors",
+        "flex h-15 w-full items-center gap-3 rounded-xl px-4 text-lg transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "bg-[#0000B8] font-semibold text-white"

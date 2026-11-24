@@ -8,6 +8,7 @@ import { getSession } from "@/lib/session";
 import { getArsipPermissions } from "@/lib/rbac";
 import AppSidebar from "@/components/Navbar";
 import TopBar from "@/components/Topbar";
+import { Toaster } from "@/components/ui/sonner";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -65,7 +66,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         geist.variable,
       )}
     >
-      <body className="min-h-screen flex flex-row bg-[#faf8ff] text-[var(--color-text-primary)]">
+      <body className="min-h-screen flex flex-row bg-[#faf8ff] text-(--color-text-primary)">
         <React.Suspense fallback={<div className="w-64 shrink-0" />}>
           <SidebarSlot />
         </React.Suspense>
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <TopBarSlot />
           </React.Suspense>
           {children}
+           <Toaster position="bottom-right" richColors closeButton />
         </main>
       </body>
     </html>
