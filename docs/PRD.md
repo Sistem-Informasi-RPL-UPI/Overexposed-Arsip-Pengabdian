@@ -2,7 +2,7 @@
 
 Dokumen ini adalah acuan untuk Claude Code dan pengembang. Tujuannya menjelaskan apa yang dibangun, keputusan yang sudah diambil, dan keputusan yang belum. **Bagian bertanda "Usulan" belum disetujui tim. Jangan diperlakukan sebagai keputusan final.** Bagian "Keputusan terbuka" harus ditanyakan ke pemilik proyek, bukan ditebak.
 
-Versi: 1.28. Berdasarkan ERD versi 6.
+Versi: 1.31. Berdasarkan ERD versi 6.
 
 | Versi | Tanggal    | Perubahan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,6 +35,9 @@ Versi: 1.28. Berdasarkan ERD versi 6.
 | 1.26  | 2026-11-23 | Keputusan 21 ditutup dengan pilihan (b): baris `manual` tetap `manual` saat ditemukan crawl, jadi crawl selalu hanya mengisi kolom kosong (5.3, 8). Keputusan 16 diubah sesuai itu. Loader tidak lagi mengubah `sumber` saat `ON CONFLICT`. |
 | 1.27  | 2026-11-23 | Fungsi kunci anti-dobel dan normalisasi nama di Next.js (issue #14, 5.3): `src/lib/kunci.ts` (`normTeks`, `kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`), port dari `loader.py` tanpa aturan baru. Aturan kunci per tabel di `loader.py` dipindah ke fungsi `kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku` (hasil tidak berubah). Fixture bersama `crawler/tests/fixtures/kunci.json` dipakai Vitest dan `unittest`. |
 | 1.28  | 2026-11-23 | Layanan FastAPI crawler (issue #15, 8.3): antrean diganti kunci tunggal (permintaan saat crawl berjalan dibalas `409`), `POST /sync` menerima `sinta_id` opsional serta `pemicu_id` dan `pemicu_nama` untuk `log_aktivitas`, aturan 7 hari dan pemesanan `IN_PROGRESS` dikerjakan atomik di layanan, pembersihan `IN_PROGRESS` hanya untuk yang lebih tua dari `SISA_IN_PROGRESS_MENIT`. Bawaan jeda tab 1,5 detik. `requirement.txt` diganti nama menjadi `requirements.txt`, `Dockerfile` dan `.env.example` diisi. |
+| 1.29  | 2026-11-24 | Route Next.js sinkron (issue #16, 8.4): `POST /api/dosen/sinkron`, `POST /api/staff-kaprodi/sinkron`, `GET /api/dosen/sinkron/status`, dan `GET /api/crawler/health`. Pemesanan `IN_PROGRESS` lewat `updateMany` dengan cabang `NULL` eksplisit, pesanan dikembalikan bila layanan crawler tidak jadi menjalankan crawl. Ping warm-up hanya untuk peran yang boleh sinkron (Dosen, Kaprodi, Staff Kaprodi), rute `/api/crawler` ditambahkan ke RBAC. Satu sinkron menghasilkan dua baris `log_aktivitas`: permintaan (Next.js) dan hasil (layanan crawler). |
+| 1.30  | 2026-11-24 | Nilai klaim `role` untuk Staff Kaprodi dari SSO ternyata `Staff_Kaprodi` (dengan garis bawah), bukan `Staff Kaprodi`. Kode disesuaikan (`SsoRole`, `normalizeRole`, `isStaffKaprodiRole`, `PERAN_DENGAN_DOSEN`, `ROLE_BOLEH_ISI_SINTA_ID`, `/api/dev-login`, `/auth/callback`) beserta tesnya. Di dokumen ini "Staff Kaprodi" tetap dipakai sebagai nama peran, nilai tekniknya `Staff_Kaprodi` (bagian 4). |
+| 1.31  | 2026-11-24 | Penegasan di 5.3: tautan `publikasi_dosen` hanya berasal dari daftar SINTA dosen yang di-crawl, bukan dari kecocokan nama di `penulis`. Paper yang memuat nama dosen tetapi tidak ada di halaman SINTA dosen itu tidak ditautkan, dan crawl ulang tidak mengubahnya. Tidak ada perubahan kode. |
 
 ---
 
@@ -90,7 +93,7 @@ Aturan penting:
 - Login sukses dan gagal dicatat di `log_aktivitas` (`modul`: `auth`, `aksi`: `login` / `login_gagal`, `objek`: `sso`, `detail`: alasan gagal atau role login). Saat gagal, `user_id` dan `user_nama` bernilai `null`. Penulisan log lewat helper `catatLog` (`src/lib/log-aktivitas.ts`); `recordAuthLog` (`src/lib/auth-log.ts`) adalah pintasan untuk login. Kegagalan menulis log hanya dicatat ke console dan tidak membatalkan operasi utama. Galat konfigurasi di callback (`SESSION_SECRET` atau konfigurasi SSO kosong) belum dicatat sebagai `login_gagal`.
 - `client_secret` hanya di environment server. Tidak boleh berawalan `NEXT_PUBLIC_`, tidak boleh masuk repo.
 
-Role dari SSO: **`Kaprodi`, `Dosen`, `Staff Kaprodi`, `Mahasiswa`.** Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, modul sementara menerima **`Admin` sebagai alias `Staff Kaprodi`**, serta **`Umum`** untuk pengunjung tanpa sesi pada rute baca publik (`/tridharma`).
+Role dari SSO: **`Kaprodi`, `Dosen`, `Staff_Kaprodi`, `Mahasiswa`.** Nilai klaim `role` untuk Staff Kaprodi ditulis `Staff_Kaprodi` (dengan garis bawah, dicek ke SSO 2026-11-24). Di seluruh dokumen ini "Staff Kaprodi" hanya nama peran dalam kalimat, sedangkan nilai yang dibandingkan di kode, sesi, dan parameter `role` di `/api/dev-login` adalah `Staff_Kaprodi`. Sesi lama yang masih memuat `Staff Kaprodi` (dengan spasi) dibaca sebagai `Umum` sampai login ulang atau refresh. Catatan: dokumen SSO v1.0 masih menyebut `Admin` dan belum memuat `Staff Kaprodi` dan `Mahasiswa`. Perubahan itu harus dilakukan oleh tim SSO. Sampai itu selesai, modul sementara menerima **`Admin` sebagai alias `Staff Kaprodi`**, serta **`Umum`** untuk pengunjung tanpa sesi pada rute baca publik (`/tridharma`).
 
 Variabel lingkungan: `SSO_URL` (tanpa `/` akhir, harus sama dengan klaim `iss`), `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI`, `SSO_POST_LOGOUT_URI` (opsional), `SESSION_SECRET`.
 
@@ -130,6 +133,7 @@ Data yang diambil per dosen: profil (nama, afiliasi, departemen), skor SINTA, me
 - **Anti-dobel.** Kunci dibuat dari teks yang dinormalisasi (huruf kecil, tanpa tanda baca), lalu di-hash md5. `publikasi.judul_hash = md5(norm(judul))`. `kegiatan.kunci = md5(jenis | judul | tahun)`. `iprs.kunci` dari nomor permohonan, atau judul dan tahun bila kosong. `buku.kunci` dari ISBN, atau judul dan tahun bila kosong. Kunci yang sama dipakai untuk data manual (5.7).
   - Penerapan (issue #14): Python di `crawler/app/loader.py` (`kunci_publikasi`, `kunci_kegiatan`, `kunci_iprs`, `kunci_buku`, `norm_nama`) menjadi acuan, dan `src/lib/kunci.ts` adalah padanannya untuk Next.js (`kunciPublikasi`, `kunciKegiatan`, `kunciIprs`, `kunciBuku`, `normNama`). Nomor permohonan dipotong 100 karakter dan ISBN 50 karakter sebelum di-hash, sesuai panjang kolom. Keduanya dicek terhadap fixture yang sama, `crawler/tests/fixtures/kunci.json`. Mengubah aturan di satu sisi wajib diikuti sisi lain dan fixture.
   - Catatan perilaku: `norm` kunci tidak membuang aksen, jadi "Análisis" dan "Análisis" (aksen terurai/NFD) menghasilkan kunci berbeda. Ini perilaku lama yang dipertahankan supaya `judul_hash` lama tetap cocok. `normNama` membuang aksen, sama dengan `norm_nama`.
+- **Tautan publikasi mengikuti daftar SINTA tiap dosen.** Baris `publikasi_dosen` hanya dibuat dari daftar SINTA dosen yang sedang di-crawl, bukan dari kecocokan nama di kolom `penulis`. Paper yang memuat nama dosen B tetapi tidak ada di halaman SINTA dosen B tidak ditautkan ke B, walaupun dosen A yang punya paper itu sudah di-crawl. Ini bukan bug, dan crawl ulang tidak mengubahnya: daftar yang sudah lengkap menghasilkan hasil sama, sedangkan tab yang terpotong batas SINTA publik (sekitar 10 item) tetap terpotong. Urutan nama di `penulis` (misalnya `Muhammad, Raditya`) tidak berpengaruh karena teks itu tidak dicocokkan (5.7). Pencocokan nama untuk publikasi belum diputuskan.
 - **Upsert.** Crawl ulang tidak menambah baris ganda, hanya memperbarui.
 - **Publikasi.** `sitasi` memakai nilai tertinggi (`GREATEST`). Kolom lain diisi hanya bila masih kosong (`COALESCE`).
 - **Urutan sumber saat simpan:** Scopus, Garuda, Google Scholar SINTA, RAMA. Nilai `publikasi_dosen.source`: `sinta_scopus`, `sinta_garuda`, `sinta_googlescholar`, `sinta_rama`.
@@ -503,6 +507,38 @@ Aturan penerapan:
 - `log_aktivitas`: satu baris per permintaan, `modul = 7`, `aksi = sinkron`, `objek = dosen`, `user_id` dan `user_nama` dari `pemicu_id` dan `pemicu_nama`, `detail` misalnya `Pemicu: X. Target: sinta_id 6681751. Hasil: 6681751 SUCCESS. Dilewati (aturan 7 hari): ...`. Route Next.js (#16) perlu mengirim `pemicu_id` dan `pemicu_nama` dari sesi.
 - Jalan lokal: dari `crawler/app`, `uvicorn main:app --port 8000` dengan `crawler/.env`. Docker: `docker build -t crawler crawler/`. Dependensi tes ada di `crawler/requirements-dev.txt` (`httpx` untuk `TestClient`).
 
+### 8.4 Route Next.js sinkron (issue #16)
+
+Penerapan di `src/app/api/dosen/sinkron/`, `src/app/api/staff-kaprodi/sinkron/`, `src/app/api/crawler/health/`, dengan logika di `src/lib/sinkron.ts` (aturan 7 hari), `src/lib/sinkron-proses.ts` (alur pesan dan panggil), dan `src/lib/crawler-client.ts` (HTTP ke Python). Galat memakai kunci `message` (6.7).
+
+| Route                                              | Peran                                | Keterangan                                                                                                                                                         |
+| -------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/dosen/sinkron`                          | Dosen, Kaprodi, Staff Kaprodi        | Sinkron diri sendiri. `sinta_id` dari baris `dosen` milik `sub` sesi. `400` "Isi sinta_id dulu..." bila baris `dosen` belum ada.                                    |
+| `POST /api/staff-kaprodi/sinkron`                  | Staff Kaprodi                        | Body `{ "sinta_id": "..." }` opsional. Kosong, `null`, atau `""` berarti semua dosen yang punya `sinta_id`. `404` bila `sinta_id` tidak terdaftar. Body rusak `400`. |
+| `GET /api/dosen/sinkron/status`                    | Dosen, Kaprodi, Staff Kaprodi        | Baca `sync_status` dan `last_synced_at` dari database untuk polling. Tanpa parameter: baris milik sendiri. `?sinta_id=` atau `?semua=true`: hanya Staff Kaprodi (`403` untuk lainnya). |
+| `GET /api/crawler/health`                          | Dosen, Kaprodi, Staff Kaprodi        | Meneruskan `GET /health` ke layanan Python dari server. `200 { "status": "ok" }`, `503` bila belum merespons (tunggu 8 detik), `500` bila `CRAWLER_URL` atau `INTERNAL_KEY` kosong. |
+
+Mahasiswa dan Umum mendapat `403` (atau `401` tanpa login) di semua route di atas, dicek di `src/proxy.ts` dan di handler (`getSinkronPermissions`).
+
+Urutan di route sinkron:
+
+1. Cek sesi dan hak. `CRAWLER_URL` dan `INTERNAL_KEY` dicek sebelum ada perubahan di database.
+2. Aturan 7 hari (`klasifikasiSinkron`): `berjalan` (IN_PROGRESS), `boleh` (belum pernah sinkron, FAILED, PARTIAL, atau SUCCESS lebih dari 7 hari), `tunggu` (SUCCESS dalam 7 hari). Tidak ada opsi paksa. Status kosong dianggap belum pernah sinkron, sama dengan `perlu_sinkron` di crawler.
+3. Semua dosen `tunggu`, tidak ada yang `boleh` dan tidak ada `berjalan`: `200` "Tidak ada dosen yang perlu disinkron (aturan 7 hari)", layanan crawler tidak dipanggil, dicatat di `log_aktivitas`. Ada yang `berjalan` tetapi tidak ada yang `boleh`: `409` "Sinkron sedang berjalan" (termasuk dosen yang memicu saat Staff Kaprodi sedang sinkron semua).
+4. `updateMany` mengubah baris yang `boleh` menjadi `IN_PROGRESS` dengan kondisi yang sama diulang di SQL (`kondisiBolehSinkron`). Cabang `sync_status IS NULL` ditulis eksplisit, karena `sync_status <> 'IN_PROGRESS'` membuang baris NULL. Tidak ada baris yang berubah: `409` "Sinkron sedang berjalan".
+5. `POST {CRAWLER_URL}/sync` dengan `X-Internal-Key`, `pemicu_id`, dan `pemicu_nama` dari sesi (8.3). Timeout 20 detik, `maxDuration` fungsi 30 detik. `202` dari layanan dibalas `202 { "message": "Sinkron dimulai", "data": { "diproses": [sinta_id], "dilewati": [...] } }`.
+6. Bila layanan tidak jadi menjalankan crawl (`409`, `404`, `200`, galat jaringan, timeout, 5xx, atau kunci ditolak), pesanan `IN_PROGRESS` dikembalikan ke status sebelumnya (hanya baris yang masih `IN_PROGRESS`), lalu balas `409`, `404`, `200`, atau `503` "Layanan crawler belum bisa dihubungi. Coba lagi sebentar." Detail galat dan nilai `INTERNAL_KEY` tidak dikirim ke klien.
+
+`dilewati` di respons Next.js berisi objek `{ sinta_id, sync_status, last_synced_at, bisa_sinkron_lagi_pada }`, supaya front-end bisa menampilkan tanggal sinkron berikutnya (8.2). Berbeda dengan layanan Python yang hanya mengirim daftar `sinta_id`.
+
+`GET /api/dosen/sinkron/status` membalas `{ "data": { sinta_id, sync_status, last_synced_at, berjalan, bisa_sinkron, bisa_sinkron_lagi_pada } }`, dan `{ "data": { "berjalan", "items": [...] } }` untuk `?semua=true`. `bisa_sinkron` mengikuti aturan 7 hari, tidak bergantung pada peran penanya. `Cache-Control: no-store`.
+
+Log aktivitas: satu sinkron menghasilkan dua baris dengan `modul = 7`, `aksi = sinkron`. Route Next.js mencatat **permintaan** (pemicu, target, dosen yang diproses dan dilewati) lewat `catatLog`. Layanan Python mencatat **hasil** (SUCCESS, PARTIAL, FAILED per dosen) saat crawl selesai (8.3). Permintaan yang ditolak `409` tidak dicatat.
+
+Batas yang diterima: `IN_PROGRESS` yang tertinggal (misalnya fungsi Vercel mati setelah memesan dan sebelum mengembalikan) hanya dibersihkan saat layanan Python menyala (8, `SISA_IN_PROGRESS_MENIT`), jadi sampai itu route sinkron membalas `409` untuk dosen tersebut.
+
+**Catatan untuk front-end (8.2).** Panggil `GET /api/crawler/health` hanya dari halaman tombol sinkron modul 7, di background, dan ulangi sampai `200` (satu panggilan menunggu paling lama 8 detik). Layanan paket gratis tidur setelah 15 menit dan tiap ping membangunkannya.
+
 ## 9. Porting MariaDB ke Postgres (Neon) dan Prisma
 
 **Kode Python (`sinta_to_db.py` menjadi `loader.py`):**
@@ -589,8 +625,10 @@ sacibiru-modul/
 │  │  ├─ dashboard.ts             (query dashboard arsip)
 │  │  ├─ tridarma.ts              (konstanta modul 7: STATUS_IPRS_MANUAL, SUMBER_SINTA, SUMBER_MANUAL)
 │  │  ├─ kunci.ts                 (kunci anti-dobel dan normNama, padanan loader.py)
+│  │  ├─ sinkron.ts               (aturan 7 hari dan kondisi updateMany atomik, logika murni)
+│  │  ├─ sinkron-proses.ts        (alur pesan IN_PROGRESS, panggil layanan, kembalikan pesanan, log)
 │  │  ├─ rbac.ts
-│  │  └─ crawler-client.ts
+│  │  └─ crawler-client.ts        (HTTP ke layanan Python: health dan sync)
 │  └─ proxy.ts                        (Next.js 16 Proxy: refresh sesi & RBAC rute)
 ├─ crawler/
 │  ├─ app/
@@ -612,8 +650,8 @@ sacibiru-modul/
 │  └─ .env.example
 ├─ tests/                         (Vitest, di luar src/, struktur meniru src/)
 │  ├─ helpers/fixtures.ts
-│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci)
-│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas: handler dengan database tiruan)
+│  ├─ lib/                        (retensi, log-aktivitas, log-aktivitas-daftar, kategori, arsip, arsip-validasi, dashboard, dosen-sesi, rbac-arsip, kunci, sinkron, rbac-sinkron)
+│  ├─ api/                        (kategori, arsip, dashboard, log-aktivitas, sinkron, sinkron-status-health: handler dengan database dan layanan crawler tiruan)
 │  └─ proxy.test.ts               (penyegaran sesi dan dosen_id)
 ├─ vitest.config.ts
 ├─ .env.example

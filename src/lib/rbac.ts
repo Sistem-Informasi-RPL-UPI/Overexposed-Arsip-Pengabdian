@@ -91,6 +91,18 @@ export function evaluateRouteRbac(pathname: string, method: string, session: Loc
     return { allowed: true, role };
   }
 
+  // Ping warm-up ke layanan crawler (PRD 8.2): hanya peran yang punya hak sinkron, supaya Umum dan
+  // Mahasiswa tidak bisa membangunkan layanan Render.
+  if (matchesPrefix(pathname, "/api/crawler")) {
+    if (!isAuthenticated) {
+      return { allowed: false, reason: "unauthenticated", role };
+    }
+    if (role === "Dosen" || role === "Kaprodi" || isStaffKaprodiRole(role)) {
+      return { allowed: true, role };
+    }
+    return { allowed: false, reason: "forbidden", role };
+  }
+
   if (matchesPrefix(pathname, "/api/dosen")) {
     if (!isAuthenticated) {
       return { allowed: false, reason: "unauthenticated", role };
@@ -189,6 +201,24 @@ export function getTridharmaPermissions(session: LocalSessionPayload | null, own
     canManageOwn,
     canUpdate: canManageOwn && isOwner,
     canDelete: canManageOwn && isOwner,
+  };
+}
+
+/**
+ * Helper izin menjalankan crawling (PRD 8.1).
+ * `canSyncSelf`: Dosen, Kaprodi, Staff Kaprodi. Syarat sudah mengisi sinta_id dicek di handler lewat baris dosen.
+ * `canSyncAny`: hanya Staff Kaprodi, untuk satu dosen (pilih) dan semua dosen.
+ */
+export function getSinkronPermissions(session: LocalSessionPayload | null) {
+  const isAuthenticated = session !== null;
+  const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
+  const staffKaprodi = isAuthenticated && isStaffKaprodiRole(role);
+
+  return {
+    role,
+    isAuthenticated,
+    canSyncSelf: isAuthenticated && (role === "Dosen" || role === "Kaprodi" || staffKaprodi),
+    canSyncAny: staffKaprodi,
   };
 }
 
