@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@/generated/prisma/client";
+import { NextRequest } from "next/server";
 import {
   BUKU_PUBLIC_SELECT,
   hitungKunciBukuSetelahUbah,
@@ -7,195 +6,119 @@ import {
   PESAN_BUKU_DUPLIKAT,
 } from "@/lib/buku";
 import { db } from "@/lib/db";
-import { catatLog } from "@/lib/log-aktivitas";
-import { jawabDetail, type KonteksRute } from "@/lib/tridarma-baca";
-import { detailBuku } from "@/lib/tridarma-data";
 import {
-  parseTridarmaIdParam,
-  parseTridarmaJsonBody,
-  requireTridarmaWriter,
+  handleTridarmaDelete,
+  handleTridarmaPatch,
   SUMBER_MANUAL,
 } from "@/lib/tridarma";
+import { jawabDetail, type KonteksRute } from "@/lib/tridarma-baca";
+import { detailBuku } from "@/lib/tridarma-data";
 
 export async function GET(_request: Request, { params }: KonteksRute) {
   const { id } = await params;
-  return jawabDetail(id, (itemId, session) => detailBuku(itemId, session), "buku");
+  return jawabDetail(
+    id,
+    (itemId, session) => detailBuku(itemId, session),
+    "buku",
+  );
 }
 
-export async function PATCH(
-  request: NextRequest,
-  context: RouteContext<"/api/tridarma/buku/[id]">,
-) {
-  const auth = await requireTridarmaWriter("data buku");
-  if (!auth.ok) return auth.response;
-
-  const { id: rawId } = await context.params;
-  const id = parseTridarmaIdParam(rawId);
-  if (id === null) {
-    return NextResponse.json({ message: "ID buku tidak valid." }, { status: 400 });
-  }
-
-  const jsonBody = await parseTridarmaJsonBody(request);
-  if (!jsonBody.ok) return jsonBody.response;
-
-  const parsed = parsePatchBukuPayload(jsonBody.data);
-  if (!parsed.ok) {
-    return NextResponse.json({ message: parsed.message }, { status: 400 });
-  }
-
-  try {
-    const existing = await db.buku.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        kunci: true,
-        judul: true,
-        tahun: true,
-        isbn: true,
-        sumber: true,
-        buku_dosen: {
-          select: { dosen_id: true },
-        },
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ message: "Buku tidak ditemukan." }, { status: 404 });
-    }
-
-    const tertautKePengguna = existing.buku_dosen.some((row) => row.dosen_id === auth.dosenId);
-    if (!tertautKePengguna) {
-      return NextResponse.json(
-        { message: "Anda tidak memiliki izin untuk mengubah buku ini." },
-        { status: 403 },
-      );
-    }
-
-    const nextKunci = hitungKunciBukuSetelahUbah(existing, parsed.data);
-    if (nextKunci !== existing.kunci) {
-      const bentrok = await db.buku.findUnique({
-        where: { kunci: nextKunci },
-        select: { id: true },
-      });
-      if (bentrok && bentrok.id !== existing.id) {
-        return NextResponse.json({ message: PESAN_BUKU_DUPLIKAT }, { status: 409 });
-      }
-    }
-
-    // PRD 5.7 & 12 #19/#21: data SINTA yang diubah menjadi sumber = manual agar crawl tidak menimpa.
-    const buku = await db.buku.update({
-      where: { id },
-      data: {
-        ...parsed.data,
-        kunci: nextKunci,
-        sumber: SUMBER_MANUAL,
-      },
-      select: BUKU_PUBLIC_SELECT,
-    });
-
-    await catatLog({
-      userId: auth.session.sub,
-      userNama: auth.session.name,
-      modul: "7",
-      aksi: "ubah",
-      objek: "buku",
-      detail: buku.judul,
-    });
-
-    return NextResponse.json({ message: "Buku berhasil diperbarui.", data: buku });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        return NextResponse.json({ message: PESAN_BUKU_DUPLIKAT }, { status: 409 });
-      }
-      if (error.code === "P2025") {
-        return NextResponse.json({ message: "Buku tidak ditemukan." }, { status: 404 });
-      }
-    }
-    console.error("PATCH /api/tridarma/buku/[id]:", error);
-    return NextResponse.json({ message: "Gagal memperbarui buku." }, { status: 500 });
-  }
-}
-
-export async function DELETE(
-  _request: NextRequest,
-  context: RouteContext<"/api/tridarma/buku/[id]">,
-) {
-  const auth = await requireTridarmaWriter("data buku");
-  if (!auth.ok) return auth.response;
-
-  const { id: rawId } = await context.params;
-  const id = parseTridarmaIdParam(rawId);
-  if (id === null) {
-    return NextResponse.json({ message: "ID buku tidak valid." }, { status: 400 });
-  }
-
-  try {
-    const existing = await db.buku.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        judul: true,
-        buku_dosen: {
-          select: { dosen_id: true },
-        },
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ message: "Buku tidak ditemukan." }, { status: 404 });
-    }
-
-    const tertautKePengguna = existing.buku_dosen.some((row) => row.dosen_id === auth.dosenId);
-    if (!tertautKePengguna) {
-      return NextResponse.json(
-        { message: "Anda tidak memiliki izin untuk menghapus buku ini." },
-        { status: 403 },
-      );
-    }
-
-    // PRD 5.7: lepas tautan milik pengguna dulu; hapus baris buku hanya bila tidak ada dosen lain yang tertaut.
-    const dataDihapus = await db.$transaction(async (tx) => {
-      await tx.bukuDosen.delete({
-        where: {
-          buku_id_dosen_id: {
-            buku_id: id,
-            dosen_id: auth.dosenId,
-          },
+export async function PATCH(request: NextRequest, { params }: KonteksRute) {
+  return handleTridarmaPatch(request, (await params).id, {
+    namaObjekPenulis: "data buku",
+    labelId: "ID buku",
+    objekLog: "buku",
+    pesanTidakDitemukan: "Buku tidak ditemukan.",
+    pesanTidakDiizinkan: "Anda tidak memiliki izin untuk mengubah buku ini.",
+    pesanDuplikat: PESAN_BUKU_DUPLIKAT,
+    pesanBerhasilUbah: "Buku berhasil diperbarui.",
+    pesanGagalUbah: "Gagal memperbarui buku.",
+    logLabel: "PATCH /api/tridarma/buku/[id]",
+    parsePayload: parsePatchBukuPayload,
+    findExisting: async (id, dosenId) => {
+      const existing = await db.buku.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          kunci: true,
+          judul: true,
+          tahun: true,
+          isbn: true,
+          sumber: true,
+          buku_dosen: { select: { dosen_id: true } },
         },
       });
-      const sisaTautan = await tx.bukuDosen.count({ where: { buku_id: id } });
-      if (sisaTautan === 0) {
-        await tx.buku.delete({ where: { id } });
-        return true;
-      }
-      return false;
-    });
-
-    await catatLog({
-      userId: auth.session.sub,
-      userNama: auth.session.name,
-      modul: "7",
-      aksi: "hapus",
-      objek: "buku",
-      detail: existing.judul,
-    });
-
-    return NextResponse.json({
-      message: dataDihapus
-        ? "Buku berhasil dihapus."
-        : "Tautan buku dari akun Anda berhasil dihapus.",
-      data: {
+      if (!existing) return null;
+      return {
         id: existing.id,
         judul: existing.judul,
-        data_dihapus: dataDihapus,
-      },
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-      return NextResponse.json({ message: "Buku tidak ditemukan." }, { status: 404 });
-    }
-    console.error("DELETE /api/tridarma/buku/[id]:", error);
-    return NextResponse.json({ message: "Gagal menghapus buku." }, { status: 500 });
-  }
+        currentKunci: existing.kunci,
+        tertautKePengguna: existing.buku_dosen.some(
+          (row) => row.dosen_id === dosenId,
+        ),
+        hitungKunciBaru: (patch) => hitungKunciBukuSetelahUbah(existing, patch),
+      };
+    },
+    findConflictByKunci: (kunci) =>
+      db.buku.findUnique({ where: { kunci }, select: { id: true } }),
+    updateData: (id, patch, nextKunci) =>
+      db.buku.update({
+        where: { id },
+        data: {
+          ...patch,
+          kunci: nextKunci,
+          sumber: SUMBER_MANUAL,
+        },
+        select: BUKU_PUBLIC_SELECT,
+      }),
+  });
+}
+
+export async function DELETE(_request: NextRequest, { params }: KonteksRute) {
+  return handleTridarmaDelete((await params).id, {
+    namaObjekPenulis: "data buku",
+    labelId: "ID buku",
+    objekLog: "buku",
+    pesanTidakDitemukan: "Buku tidak ditemukan.",
+    pesanTidakDiizinkan: "Anda tidak memiliki izin untuk menghapus buku ini.",
+    pesanTerhapus: "Buku berhasil dihapus.",
+    pesanTautanTerhapus: "Tautan buku dari akun Anda berhasil dihapus.",
+    pesanGagalHapus: "Gagal menghapus buku.",
+    logLabel: "DELETE /api/tridarma/buku/[id]",
+    findExisting: async (id, dosenId) => {
+      const existing = await db.buku.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          judul: true,
+          buku_dosen: { select: { dosen_id: true } },
+        },
+      });
+      if (!existing) return null;
+      return {
+        id: existing.id,
+        judul: existing.judul,
+        tertautKePengguna: existing.buku_dosen.some(
+          (row) => row.dosen_id === dosenId,
+        ),
+      };
+    },
+    hapusTautanAtauData: (id, dosenId) =>
+      db.$transaction(async (tx) => {
+        await tx.bukuDosen.delete({
+          where: {
+            buku_id_dosen_id: {
+              buku_id: id,
+              dosen_id: dosenId,
+            },
+          },
+        });
+        const sisaTautan = await tx.bukuDosen.count({ where: { buku_id: id } });
+        if (sisaTautan === 0) {
+          await tx.buku.delete({ where: { id } });
+          return true;
+        }
+        return false;
+      }),
+  });
 }

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { BukuTestPanel, type BukuTestItem } from "@/components/BukuTestPanel";
-import { IprsTestPanel, type IprsTestItem } from "@/components/IprsTestPanel";
+import type { BukuTestItem } from "@/components/BukuTestPanel";
+import type { IprsTestItem } from "@/components/IprsTestPanel";
+import type { KegiatanTestItem } from "@/components/KegiatanTestPanel";
+import type { PublikasiTestItem } from "@/components/PublikasiTestPanel";
+import { TridharmaTestTabs } from "@/components/TridharmaTestTabs";
 import { db } from "@/lib/db";
 import { getTridharmaPermissions } from "@/lib/rbac";
 import { getSession } from "@/lib/session";
@@ -42,61 +45,123 @@ async function TridharmaContent() {
   const ownPerms = getTridharmaPermissions(session);
   const otherPerms = getTridharmaPermissions(session, -1);
 
-  const [dosenRow, rawBuku, rawIprs] = await Promise.all([
-    session
-      ? db.dosen.findUnique({
-          where: { user_id: session.sub },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
-    db.buku.findMany({
-      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-      take: 50,
-      select: {
-        id: true,
-        kunci: true,
-        judul: true,
-        kategori: true,
-        penulis: true,
-        penerbit: true,
-        tahun: true,
-        tempat_terbit: true,
-        isbn: true,
-        sumber: true,
-        buku_dosen: {
-          select: { dosen_id: true },
+  const [dosenRow, rawPublikasi, rawKegiatan, rawIprs, rawBuku] =
+    await Promise.all([
+      session
+        ? db.dosen.findUnique({
+            where: { user_id: session.sub },
+            select: { id: true, nama: true },
+          })
+        : Promise.resolve(null),
+      db.publikasi.findMany({
+        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+        take: 50,
+        select: {
+          id: true,
+          judul_hash: true,
+          judul: true,
+          tahun: true,
+          penulis: true,
+          jurnal: true,
+          sitasi: true,
+          link: true,
+          kuartil: true,
+          jenis: true,
+          penerbit: true,
+          doi: true,
+          akreditasi: true,
+          sumber: true,
+          publikasi_dosen: {
+            select: { dosen_id: true, source: true },
+          },
         },
-      },
-    }),
-    db.iprs.findMany({
-      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-      take: 50,
-      select: {
-        id: true,
-        kunci: true,
-        judul: true,
-        jenis: true,
-        tahun: true,
-        nomor_permohonan: true,
-        status: true,
-        pemegang: true,
-        inventor: true,
-        sumber: true,
-        iprs_dosen: {
-          select: { dosen_id: true },
+      }),
+      db.kegiatan.findMany({
+        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+        take: 50,
+        select: {
+          id: true,
+          kunci: true,
+          jenis: true,
+          judul: true,
+          tahun: true,
+          skema: true,
+          dana_nominal: true,
+          sumber_dana: true,
+          sumber: true,
+          anggota: {
+            orderBy: [{ peran: "asc" }, { nama: "asc" }],
+            select: { nama: true, peran: true, dosen_id: true },
+          },
         },
-      },
-    }),
-  ]);
+      }),
+      db.iprs.findMany({
+        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+        take: 50,
+        select: {
+          id: true,
+          kunci: true,
+          judul: true,
+          jenis: true,
+          tahun: true,
+          nomor_permohonan: true,
+          status: true,
+          pemegang: true,
+          inventor: true,
+          sumber: true,
+          iprs_dosen: {
+            select: { dosen_id: true },
+          },
+        },
+      }),
+      db.buku.findMany({
+        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+        take: 50,
+        select: {
+          id: true,
+          kunci: true,
+          judul: true,
+          kategori: true,
+          penulis: true,
+          penerbit: true,
+          tahun: true,
+          tempat_terbit: true,
+          isbn: true,
+          sumber: true,
+          buku_dosen: {
+            select: { dosen_id: true },
+          },
+        },
+      }),
+    ]);
 
-  const bukuItems: BukuTestItem[] = rawBuku.map(({ buku_dosen, ...buku }) => ({
-    ...buku,
-    dosenIds: buku_dosen.map((row) => row.dosen_id),
-  }));
+  const publikasiItems: PublikasiTestItem[] = rawPublikasi.map(
+    ({ publikasi_dosen, ...publikasi }) => ({
+      ...publikasi,
+      sources: [...new Set(publikasi_dosen.map((row) => row.source))],
+      dosenIds: [...new Set(publikasi_dosen.map((row) => row.dosen_id))],
+    }),
+  );
+
+  const kegiatanItems: KegiatanTestItem[] = rawKegiatan.map(
+    ({ anggota, dana_nominal, ...kegiatan }) => ({
+      ...kegiatan,
+      dana_nominal: Number(dana_nominal),
+      anggota,
+      dosenIds: anggota.flatMap((row) =>
+        row.dosen_id !== null ? [row.dosen_id] : [],
+      ),
+    }),
+  );
 
   const iprsItems: IprsTestItem[] = rawIprs.map(({ iprs_dosen, ...iprs }) => ({
     ...iprs,
     dosenIds: iprs_dosen.map((row) => row.dosen_id),
+  }));
+
+  const bukuItems: BukuTestItem[] = rawBuku.map(({ buku_dosen, ...buku }) => ({
+    ...buku,
+    dosenIds: buku_dosen.map((row) => row.dosen_id),
   }));
 
   return (
@@ -139,18 +204,15 @@ async function TridharmaContent() {
         </ul>
       </div>
 
-      <BukuTestPanel
-        items={bukuItems}
+      <TridharmaTestTabs
+        publikasiItems={publikasiItems}
+        kegiatanItems={kegiatanItems}
+        iprsItems={iprsItems}
+        bukuItems={bukuItems}
         canManage={ownPerms.canManageOwn}
         role={ownPerms.role}
         currentDosenId={dosenRow?.id ?? null}
-      />
-
-      <IprsTestPanel
-        items={iprsItems}
-        canManage={ownPerms.canManageOwn}
-        role={ownPerms.role}
-        currentDosenId={dosenRow?.id ?? null}
+        currentDosenNama={dosenRow?.nama ?? null}
       />
 
       <nav

@@ -78,6 +78,8 @@ describe("parseTim", () => {
     ["nama satu huruf", "A; Rekan Uji"],
     ["nama hanya gelar", "Dr.; Rekan Uji"],
     ["nama hanya angka", "12345; Rekan Uji"],
+    ["nama mengandung angka", "Budi 99; Rekan Uji"],
+    ["nama berisi simbol acak", "-?///ab; Rekan Uji"],
   ])("ditolak: %s", (_nama, nilai) => {
     expect(parseTim(nilai).ok).toBe(false);
   });
@@ -162,8 +164,13 @@ describe("parseCreateKegiatanPayload", () => {
     expect(ok({ ...DASAR, tahun: " 2023 " }).data.tahun).toBe(2023);
   });
 
-  it.each([[""], ["ab"], ["12"], [" "], [123]])("judul %j ditolak", (judul) => {
+  it.each([[""], ["ab"], ["12"], [" "], [123], ["-?///a/"], ["Judul /// Simbol"]])("judul %j ditolak", (judul) => {
     expect(parseCreateKegiatanPayload({ ...DASAR, judul }).ok).toBe(false);
+  });
+
+  it("skema atau sumber dana tanpa huruf ditolak", () => {
+    expect(parseCreateKegiatanPayload({ ...DASAR, skema: "---" }).ok).toBe(false);
+    expect(parseCreateKegiatanPayload({ ...DASAR, sumber_dana: "12345" }).ok).toBe(false);
   });
 
   it("skema maksimal 255 dan sumber dana maksimal 100 karakter", () => {

@@ -1,13 +1,26 @@
 import type { JenisKegiatan, PeranKegiatan } from "@/generated/prisma/client";
 import { kunciKegiatan, normNama } from "@/lib/kunci";
+import {
+  hitungHuruf,
+  isPlainObject,
+  parseJudulTridarma,
+  parseTahunTridarma,
+  parseTeksBerhurufOpsional,
+  RE_ANGKA,
+  RE_NAMA_HURUF_KARAKTER,
+  RE_SIMBOL_BERUNTUN,
+  TRIDARMA_TAHUN_MAX,
+  TRIDARMA_TAHUN_MIN,
+  type FieldResult,
+} from "@/lib/tridarma";
 
 /**
  * Validasi tulis kegiatan manual (penelitian dan pengabdian, PRD 5.7). Fungsi di sini murni: tidak menyentuh database.
  * Peserta datang dalam satu kolom `tim` (nama dipisah `;`), lalu dipecah menjadi baris `kegiatan_anggota`.
  */
 
-export const KEGIATAN_TAHUN_MIN = 1000;
-export const KEGIATAN_TAHUN_MAX = 9999;
+export const KEGIATAN_TAHUN_MIN = TRIDARMA_TAHUN_MIN;
+export const KEGIATAN_TAHUN_MAX = TRIDARMA_TAHUN_MAX;
 export const KEGIATAN_JUDUL_MIN = 3;
 export const KEGIATAN_JUDUL_MAKS = 1000;
 export const KEGIATAN_SKEMA_MAKS = 255;
@@ -17,14 +30,14 @@ export const TIM_JUMLAH_MAKS = 50;
 export const TIM_NAMA_MAKS = 200;
 
 export const PESAN_KEGIATAN_DUPLIKAT = "Kegiatan ini sudah ada di data.";
-export const PESAN_KEGIATAN_DITAUTKAN = "Kegiatan ini sudah ada dan sudah dihubungkan ke akunmu.";
+export const PESAN_KEGIATAN_DITAUTKAN =
+  "Kegiatan ini sudah ada dan sudah dihubungkan ke akunmu.";
 export const PESAN_NAMA_HARUS_ADA = "Nama kamu harus ada di daftar tim.";
 export const PESAN_SINKRON_DULU =
   "Sinkron data SINTA dulu sebelum mengelola kegiatan, supaya nama kamu sama dengan nama di SINTA.";
 export const PESAN_TANPA_STATUS = "Kegiatan tidak memiliki field status.";
 
 const JENIS: readonly JenisKegiatan[] = ["penelitian", "pengabdian"];
-const RE_HURUF = /\p{L}/gu;
 const RE_ANGKA_DESIMAL = /^\d+(\.\d{1,2})?$/;
 
 export interface KegiatanWriteData {
@@ -43,63 +56,20 @@ export interface AnggotaTim {
   peran: PeranKegiatan;
 }
 
-type Hasil<T> = { ok: true; value: T } | { ok: false; message: string };
-
-function hitungHuruf(teks: string): number {
-  return teks.match(RE_HURUF)?.length ?? 0;
-}
-
-function parseJenis(raw: unknown): Hasil<JenisKegiatan> {
+function parseJenis(raw: unknown): FieldResult<JenisKegiatan> {
   const teks = typeof raw === "string" ? raw.trim().toLowerCase() : "";
   const cocok = JENIS.find((j) => j === teks);
-  if (!cocok) return { ok: false, message: "Jenis kegiatan harus penelitian atau pengabdian." };
+  if (!cocok) {
+    return {
+      ok: false,
+      message: "Jenis kegiatan harus penelitian atau pengabdian.",
+    };
+  }
   return { ok: true, value: cocok };
 }
 
-function parseJudul(raw: unknown): Hasil<string> {
-  const value = typeof raw === "string" ? raw.trim() : "";
-  if (!value) return { ok: false, message: "Judul kegiatan harus diisi." };
-  const panjang = Array.from(value).length;
-  if (panjang < KEGIATAN_JUDUL_MIN || hitungHuruf(value) < 2) {
-    return { ok: false, message: "Judul kegiatan minimal 3 karakter dan mengandung minimal 2 huruf." };
-  }
-  if (panjang > KEGIATAN_JUDUL_MAKS) {
-    return { ok: false, message: `Judul kegiatan maksimal ${KEGIATAN_JUDUL_MAKS} karakter.` };
-  }
-  return { ok: true, value };
-}
-
-function parseTahun(raw: unknown): Hasil<number> {
-  let value: number;
-  if (typeof raw === "number") {
-    if (!Number.isInteger(raw)) return { ok: false, message: "Tahun harus berupa bilangan bulat 4 digit." };
-    value = raw;
-  } else if (typeof raw === "string") {
-    const teks = raw.trim();
-    if (!teks) return { ok: false, message: "Tahun harus diisi." };
-    if (!/^\d+$/.test(teks)) return { ok: false, message: "Tahun harus berupa bilangan bulat 4 digit." };
-    value = Number.parseInt(teks, 10);
-  } else {
-    return { ok: false, message: "Tahun harus diisi." };
-  }
-
-  if (value < KEGIATAN_TAHUN_MIN || value > KEGIATAN_TAHUN_MAX) {
-    return { ok: false, message: `Tahun harus antara ${KEGIATAN_TAHUN_MIN} dan ${KEGIATAN_TAHUN_MAX}.` };
-  }
-  return { ok: true, value };
-}
-
-function parseTeksOpsional(raw: unknown, label: string, maks: number): Hasil<string | null> {
-  if (raw === undefined || raw === null) return { ok: true, value: null };
-  if (typeof raw !== "string") return { ok: false, message: `${label} harus berupa teks.` };
-  const teks = raw.trim();
-  if (!teks) return { ok: true, value: null };
-  if (Array.from(teks).length > maks) return { ok: false, message: `${label} maksimal ${maks} karakter.` };
-  return { ok: true, value: teks };
-}
-
 /** Dana: angka atau teks angka (maksimal 2 desimal), 0 sampai batas kolom. Kosong berarti 0, sama dengan crawler. */
-function parseDana(raw: unknown): Hasil<number> {
+function parseDana(raw: unknown): FieldResult<number> {
   if (raw === undefined || raw === null) return { ok: true, value: 0 };
 
   let value: number;
@@ -109,7 +79,11 @@ function parseDana(raw: unknown): Hasil<number> {
     const teks = raw.trim();
     if (!teks) return { ok: true, value: 0 };
     if (!RE_ANGKA_DESIMAL.test(teks)) {
-      return { ok: false, message: "Dana harus berupa angka (tanpa titik pemisah ribuan, maksimal 2 desimal)." };
+      return {
+        ok: false,
+        message:
+          "Dana harus berupa angka (tanpa titik pemisah ribuan, maksimal 2 desimal).",
+      };
     }
     value = Number(teks);
   } else {
@@ -126,14 +100,25 @@ function parseDana(raw: unknown): Hasil<number> {
  * `tim`: nama dipisah `;`. Nama pertama menjadi ketua, nama berikutnya anggota. Nama yang sama (setelah normalisasi)
  * digabung menjadi satu baris dengan posisi paling awal, jadi nama pertama tetap pertama.
  */
-export function parseTim(raw: unknown): Hasil<AnggotaTim[]> {
+export function parseTim(raw: unknown): FieldResult<AnggotaTim[]> {
   if (typeof raw !== "string") {
-    return { ok: false, message: "Tim harus diisi: nama dipisah titik koma (;), nama pertama menjadi ketua." };
+    return {
+      ok: false,
+      message:
+        "Tim harus diisi: nama dipisah titik koma (;), nama pertama menjadi ketua.",
+    };
   }
 
-  const segmen = raw.split(";").map((s) => s.trim()).filter(Boolean);
+  const segmen = raw
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (segmen.length === 0) {
-    return { ok: false, message: "Tim harus diisi: nama dipisah titik koma (;), nama pertama menjadi ketua." };
+    return {
+      ok: false,
+      message:
+        "Tim harus diisi: nama dipisah titik koma (;), nama pertama menjadi ketua.",
+    };
   }
   if (segmen.length > TIM_JUMLAH_MAKS) {
     return { ok: false, message: `Tim maksimal ${TIM_JUMLAH_MAKS} orang.` };
@@ -142,11 +127,30 @@ export function parseTim(raw: unknown): Hasil<AnggotaTim[]> {
   const peta = new Map<string, string>();
   for (const nama of segmen) {
     if (Array.from(nama).length > TIM_NAMA_MAKS) {
-      return { ok: false, message: `Setiap nama di tim maksimal ${TIM_NAMA_MAKS} karakter.` };
+      return {
+        ok: false,
+        message: `Setiap nama di tim maksimal ${TIM_NAMA_MAKS} karakter.`,
+      };
+    }
+    if (RE_ANGKA.test(nama)) {
+      return {
+        ok: false,
+        message: "Nama anggota tim tidak boleh mengandung angka.",
+      };
+    }
+    if (!RE_NAMA_HURUF_KARAKTER.test(nama) || RE_SIMBOL_BERUNTUN.test(nama)) {
+      return {
+        ok: false,
+        message:
+          "Setiap nama di tim hanya boleh berisi nama/gelar huruf yang wajar.",
+      };
     }
     const namaNormal = normNama(nama);
     if (!namaNormal || hitungHuruf(nama) < 2) {
-      return { ok: false, message: "Setiap nama di tim harus valid (minimal 2 huruf)." };
+      return {
+        ok: false,
+        message: "Setiap nama di tim harus valid (minimal 2 huruf).",
+      };
     }
     if (!peta.has(namaNormal)) peta.set(namaNormal, nama);
   }
@@ -166,26 +170,39 @@ function bacaKunci(body: Record<string, unknown>, ...kunci: string[]): unknown {
 
 export function parseCreateKegiatanPayload(
   rawBody: unknown,
-): { ok: true; data: KegiatanWriteData; tim: AnggotaTim[]; kunci: string } | { ok: false; message: string } {
-  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+):
+  | { ok: true; data: KegiatanWriteData; tim: AnggotaTim[]; kunci: string }
+  | { ok: false; message: string } {
+  if (!isPlainObject(rawBody)) {
     return { ok: false, message: "Body request tidak valid." };
   }
-  const body = rawBody as Record<string, unknown>;
-  if ("status" in body) return { ok: false, message: PESAN_TANPA_STATUS };
+  if ("status" in rawBody) return { ok: false, message: PESAN_TANPA_STATUS };
 
-  const jenis = parseJenis(body.jenis);
+  const jenis = parseJenis(rawBody.jenis);
   if (!jenis.ok) return jenis;
-  const judul = parseJudul(body.judul);
+  const judul = parseJudulTridarma(
+    rawBody.judul,
+    "Judul kegiatan",
+    KEGIATAN_JUDUL_MAKS,
+  );
   if (!judul.ok) return judul;
-  const tahun = parseTahun(body.tahun);
+  const tahun = parseTahunTridarma(rawBody.tahun, "Tahun");
   if (!tahun.ok) return tahun;
-  const skema = parseTeksOpsional(body.skema, "Skema", KEGIATAN_SKEMA_MAKS);
+  const skema = parseTeksBerhurufOpsional(
+    rawBody.skema,
+    "Skema",
+    KEGIATAN_SKEMA_MAKS,
+  );
   if (!skema.ok) return skema;
-  const dana = parseDana(bacaKunci(body, "dana_nominal", "danaNominal"));
+  const dana = parseDana(bacaKunci(rawBody, "dana_nominal", "danaNominal"));
   if (!dana.ok) return dana;
-  const sumberDana = parseTeksOpsional(bacaKunci(body, "sumber_dana", "sumberDana"), "Sumber dana", KEGIATAN_SUMBER_DANA_MAKS);
+  const sumberDana = parseTeksBerhurufOpsional(
+    bacaKunci(rawBody, "sumber_dana", "sumberDana"),
+    "Sumber dana",
+    KEGIATAN_SUMBER_DANA_MAKS,
+  );
   if (!sumberDana.ok) return sumberDana;
-  const tim = parseTim(body.tim);
+  const tim = parseTim(rawBody.tim);
   if (!tim.ok) return tim;
 
   const data: KegiatanWriteData = {
@@ -196,59 +213,80 @@ export function parseCreateKegiatanPayload(
     dana_nominal: dana.value,
     sumber_dana: sumberDana.value,
   };
-  return { ok: true, data, tim: tim.value, kunci: kunciKegiatan(data.jenis, data.judul, data.tahun) };
+  return {
+    ok: true,
+    data,
+    tim: tim.value,
+    kunci: kunciKegiatan(data.jenis, data.judul, data.tahun),
+  };
 }
 
 export function parsePatchKegiatanPayload(
   rawBody: unknown,
-): { ok: true; data: Partial<KegiatanWriteData>; tim?: AnggotaTim[] } | { ok: false; message: string } {
-  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+):
+  | { ok: true; data: Partial<KegiatanWriteData>; tim?: AnggotaTim[] }
+  | { ok: false; message: string } {
+  if (!isPlainObject(rawBody)) {
     return { ok: false, message: "Body request tidak valid." };
   }
-  const body = rawBody as Record<string, unknown>;
-  if ("status" in body) return { ok: false, message: PESAN_TANPA_STATUS };
+  if ("status" in rawBody) return { ok: false, message: PESAN_TANPA_STATUS };
 
   const data: Partial<KegiatanWriteData> = {};
   let tim: AnggotaTim[] | undefined;
 
-  if ("jenis" in body) {
-    const r = parseJenis(body.jenis);
+  if ("jenis" in rawBody) {
+    const r = parseJenis(rawBody.jenis);
     if (!r.ok) return r;
     data.jenis = r.value;
   }
-  if ("judul" in body) {
-    const r = parseJudul(body.judul);
+  if ("judul" in rawBody) {
+    const r = parseJudulTridarma(
+      rawBody.judul,
+      "Judul kegiatan",
+      KEGIATAN_JUDUL_MAKS,
+    );
     if (!r.ok) return r;
     data.judul = r.value;
   }
-  if ("tahun" in body) {
-    const r = parseTahun(body.tahun);
+  if ("tahun" in rawBody) {
+    const r = parseTahunTridarma(rawBody.tahun, "Tahun");
     if (!r.ok) return r;
     data.tahun = r.value;
   }
-  if ("skema" in body) {
-    const r = parseTeksOpsional(body.skema, "Skema", KEGIATAN_SKEMA_MAKS);
+  if ("skema" in rawBody) {
+    const r = parseTeksBerhurufOpsional(
+      rawBody.skema,
+      "Skema",
+      KEGIATAN_SKEMA_MAKS,
+    );
     if (!r.ok) return r;
     data.skema = r.value;
   }
-  if ("dana_nominal" in body || "danaNominal" in body) {
-    const r = parseDana(bacaKunci(body, "dana_nominal", "danaNominal"));
+  if ("dana_nominal" in rawBody || "danaNominal" in rawBody) {
+    const r = parseDana(bacaKunci(rawBody, "dana_nominal", "danaNominal"));
     if (!r.ok) return r;
     data.dana_nominal = r.value;
   }
-  if ("sumber_dana" in body || "sumberDana" in body) {
-    const r = parseTeksOpsional(bacaKunci(body, "sumber_dana", "sumberDana"), "Sumber dana", KEGIATAN_SUMBER_DANA_MAKS);
+  if ("sumber_dana" in rawBody || "sumberDana" in rawBody) {
+    const r = parseTeksBerhurufOpsional(
+      bacaKunci(rawBody, "sumber_dana", "sumberDana"),
+      "Sumber dana",
+      KEGIATAN_SUMBER_DANA_MAKS,
+    );
     if (!r.ok) return r;
     data.sumber_dana = r.value;
   }
-  if ("tim" in body) {
-    const r = parseTim(body.tim);
+  if ("tim" in rawBody) {
+    const r = parseTim(rawBody.tim);
     if (!r.ok) return r;
     tim = r.value;
   }
 
   if (Object.keys(data).length === 0 && !tim) {
-    return { ok: false, message: "Minimal satu field kegiatan harus diisi untuk diperbarui." };
+    return {
+      ok: false,
+      message: "Minimal satu field kegiatan harus diisi untuk diperbarui.",
+    };
   }
   return { ok: true, data, tim };
 }
@@ -257,7 +295,11 @@ export function hitungKunciKegiatanSetelahUbah(
   existing: { jenis: JenisKegiatan; judul: string; tahun: number | null },
   patch: Partial<KegiatanWriteData>,
 ): string {
-  return kunciKegiatan(patch.jenis ?? existing.jenis, patch.judul ?? existing.judul, patch.tahun ?? existing.tahun);
+  return kunciKegiatan(
+    patch.jenis ?? existing.jenis,
+    patch.judul ?? existing.judul,
+    patch.tahun ?? existing.tahun,
+  );
 }
 
 export interface BarisAnggota {
@@ -291,15 +333,34 @@ export function rencanakanAnggota(args: {
   const { existing, tim, petaDosen, pengguna } = args;
   const lama = new Map(existing.map((a) => [a.nama_normal, a]));
   const baru = new Set(tim.map((t) => t.nama_normal));
-  const rencana: RencanaAnggota = { hapus: [], buat: [], ubah: [], turunkan: [] };
+  const rencana: RencanaAnggota = {
+    hapus: [],
+    buat: [],
+    ubah: [],
+    turunkan: [],
+  };
 
   for (const t of tim) {
     const ada = lama.get(t.nama_normal);
-    const dosenId = ada?.dosen_id ?? (t.nama_normal === pengguna.namaNormal ? pengguna.dosenId : (petaDosen.get(t.nama_normal) ?? null));
-    const hasil: BarisAnggota = { nama: t.nama, nama_normal: t.nama_normal, peran: t.peran, dosen_id: dosenId };
+    const dosenId =
+      ada?.dosen_id ??
+      (t.nama_normal === pengguna.namaNormal
+        ? pengguna.dosenId
+        : (petaDosen.get(t.nama_normal) ?? null));
+    const hasil: BarisAnggota = {
+      nama: t.nama,
+      nama_normal: t.nama_normal,
+      peran: t.peran,
+      dosen_id: dosenId,
+    };
 
     if (!ada) rencana.buat.push(hasil);
-    else if (ada.nama !== hasil.nama || ada.peran !== hasil.peran || ada.dosen_id !== hasil.dosen_id) rencana.ubah.push(hasil);
+    else if (
+      ada.nama !== hasil.nama ||
+      ada.peran !== hasil.peran ||
+      ada.dosen_id !== hasil.dosen_id
+    )
+      rencana.ubah.push(hasil);
   }
 
   for (const a of existing) {

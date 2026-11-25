@@ -276,7 +276,7 @@ export function BukuTestPanel({
   return (
     <section
       aria-labelledby="buku-uji-heading"
-      className="flex flex-col gap-6 border-t border-[var(--color-border-default)] pt-6"
+      className="flex flex-col gap-6"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
