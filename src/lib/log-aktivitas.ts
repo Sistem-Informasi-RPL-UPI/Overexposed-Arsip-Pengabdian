@@ -19,7 +19,10 @@ export type ObjekLog =
   | "buku"
   | "kegiatan"
   | "iprs"
-  | "publikasi";
+  | "publikasi"
+  | "matkul"
+  | "kelas"
+  | "berkas_pengajaran";
 
 export interface CatatLogInput {
   // Kosong untuk login gagal, karena belum ada akun yang teridentifikasi.

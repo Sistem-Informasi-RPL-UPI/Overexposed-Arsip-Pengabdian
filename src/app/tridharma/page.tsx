@@ -4,10 +4,15 @@ import { Suspense } from "react";
 import type { BukuTestItem } from "@/components/BukuTestPanel";
 import type { IprsTestItem } from "@/components/IprsTestPanel";
 import type { KegiatanTestItem } from "@/components/KegiatanTestPanel";
+import type {
+  BerkasPengajaranTestItem,
+  KelasTestItem,
+  MatkulTestItem,
+} from "@/components/PengajaranTestPanel";
 import type { PublikasiTestItem } from "@/components/PublikasiTestPanel";
 import { TridharmaTestTabs } from "@/components/TridharmaTestTabs";
 import { db } from "@/lib/db";
-import { getTridharmaPermissions } from "@/lib/rbac";
+import { getPengajaranPermissions, getTridharmaPermissions } from "@/lib/rbac";
 import { getSession } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -44,96 +49,168 @@ async function TridharmaContent() {
   const session = await getSession();
   const ownPerms = getTridharmaPermissions(session);
   const otherPerms = getTridharmaPermissions(session, -1);
+  const pengajaranPerms = getPengajaranPermissions(session);
 
-  const [dosenRow, rawPublikasi, rawKegiatan, rawIprs, rawBuku] =
-    await Promise.all([
-      session
-        ? db.dosen.findUnique({
-            where: { user_id: session.sub },
-            select: { id: true, nama: true },
-          })
-        : Promise.resolve(null),
-      db.publikasi.findMany({
-        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-        take: 50,
-        select: {
-          id: true,
-          judul_hash: true,
-          judul: true,
-          tahun: true,
-          penulis: true,
-          jurnal: true,
-          sitasi: true,
-          link: true,
-          kuartil: true,
-          jenis: true,
-          penerbit: true,
-          doi: true,
-          akreditasi: true,
-          sumber: true,
-          publikasi_dosen: {
-            select: { dosen_id: true, source: true },
-          },
+  const dosenRow = session
+    ? await db.dosen.findUnique({
+        where: { user_id: session.sub },
+        select: { id: true, nama: true },
+      })
+    : null;
+
+  // TODO(PRD 12 #15): Sampai keputusan terbuka #15 ditetapkan, Dosen hanya melihat kelas & berkas miliknya sendiri.
+  const kelasWhere =
+    pengajaranPerms.role === "Dosen"
+      ? { dosen_id: dosenRow?.id ?? -1 }
+      : {};
+  const berkasWhere =
+    pengajaranPerms.role === "Dosen"
+      ? { kelas: { dosen_id: dosenRow?.id ?? -1 } }
+      : {};
+
+  const [
+    rawPublikasi,
+    rawKegiatan,
+    rawIprs,
+    rawBuku,
+    rawMatkul,
+    rawKelas,
+    rawBerkas,
+  ] = await Promise.all([
+    db.publikasi.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        judul_hash: true,
+        judul: true,
+        tahun: true,
+        penulis: true,
+        jurnal: true,
+        sitasi: true,
+        link: true,
+        kuartil: true,
+        jenis: true,
+        penerbit: true,
+        doi: true,
+        akreditasi: true,
+        sumber: true,
+        publikasi_dosen: {
+          select: { dosen_id: true, source: true },
         },
-      }),
-      db.kegiatan.findMany({
-        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-        take: 50,
-        select: {
-          id: true,
-          kunci: true,
-          jenis: true,
-          judul: true,
-          tahun: true,
-          skema: true,
-          dana_nominal: true,
-          sumber_dana: true,
-          sumber: true,
-          anggota: {
-            orderBy: [{ peran: "asc" }, { nama: "asc" }],
-            select: { nama: true, peran: true, dosen_id: true },
-          },
+      },
+    }),
+    db.kegiatan.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        kunci: true,
+        jenis: true,
+        judul: true,
+        tahun: true,
+        skema: true,
+        dana_nominal: true,
+        sumber_dana: true,
+        sumber: true,
+        anggota: {
+          orderBy: [{ peran: "asc" }, { nama: "asc" }],
+          select: { nama: true, peran: true, dosen_id: true },
         },
-      }),
-      db.iprs.findMany({
-        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-        take: 50,
-        select: {
-          id: true,
-          kunci: true,
-          judul: true,
-          jenis: true,
-          tahun: true,
-          nomor_permohonan: true,
-          status: true,
-          pemegang: true,
-          inventor: true,
-          sumber: true,
-          iprs_dosen: {
-            select: { dosen_id: true },
-          },
+      },
+    }),
+    db.iprs.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        kunci: true,
+        judul: true,
+        jenis: true,
+        tahun: true,
+        nomor_permohonan: true,
+        status: true,
+        pemegang: true,
+        inventor: true,
+        sumber: true,
+        iprs_dosen: {
+          select: { dosen_id: true },
         },
-      }),
-      db.buku.findMany({
-        orderBy: [{ updated_at: "desc" }, { id: "desc" }],
-        take: 50,
-        select: {
-          id: true,
-          kunci: true,
-          judul: true,
-          kategori: true,
-          penulis: true,
-          penerbit: true,
-          tahun: true,
-          tempat_terbit: true,
-          isbn: true,
-          sumber: true,
-          buku_dosen: {
-            select: { dosen_id: true },
-          },
+      },
+    }),
+    db.buku.findMany({
+      orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        kunci: true,
+        judul: true,
+        kategori: true,
+        penulis: true,
+        penerbit: true,
+        tahun: true,
+        tempat_terbit: true,
+        isbn: true,
+        sumber: true,
+        buku_dosen: {
+          select: { dosen_id: true },
         },
-      }),
-    ]);
+      },
+    }),
+    pengajaranPerms.canViewPengajaran
+      ? db.matkul.findMany({
+          orderBy: [{ kode: "asc" }, { id: "asc" }],
+          take: 50,
+          select: {
+            id: true,
+            kode: true,
+            nama: true,
+            sks: true,
+            _count: { select: { kelas: true } },
+          },
+        })
+      : Promise.resolve([]),
+    pengajaranPerms.canViewPengajaran
+      ? db.kelas.findMany({
+          where: kelasWhere,
+          orderBy: [{ tahun_ajaran: "desc" }, { id: "desc" }],
+          take: 50,
+          select: {
+            id: true,
+            matkul_id: true,
+            dosen_id: true,
+            tahun_ajaran: true,
+            semester: true,
+            matkul: { select: { kode: true, nama: true } },
+            dosen: { select: { nama: true } },
+            _count: { select: { berkas: true } },
+          },
+        })
+      : Promise.resolve([]),
+    pengajaranPerms.canViewPengajaran
+      ? db.berkasPengajaran.findMany({
+          where: berkasWhere,
+          orderBy: [{ updated_at: "desc" }, { id: "desc" }],
+          take: 50,
+          select: {
+            id: true,
+            kelas_id: true,
+            jenis: true,
+            judul: true,
+            link: true,
+            keterangan: true,
+            kelas: {
+              select: {
+                dosen_id: true,
+                tahun_ajaran: true,
+                semester: true,
+                matkul: { select: { kode: true } },
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const publikasiItems: PublikasiTestItem[] = rawPublikasi.map(
     ({ publikasi_dosen, ...publikasi }) => ({
@@ -164,6 +241,31 @@ async function TridharmaContent() {
     dosenIds: buku_dosen.map((row) => row.dosen_id),
   }));
 
+  const matkulItems: MatkulTestItem[] = rawMatkul.map(
+    ({ _count, ...matkul }) => ({
+      ...matkul,
+      jumlah_kelas: _count.kelas,
+    }),
+  );
+
+  const kelasItems: KelasTestItem[] = rawKelas.map(
+    ({ _count, matkul, dosen, ...kelas }) => ({
+      ...kelas,
+      matkul_kode: matkul.kode,
+      matkul_nama: matkul.nama,
+      dosen_nama: dosen.nama,
+      jumlah_berkas: _count.berkas,
+    }),
+  );
+
+  const berkasItems: BerkasPengajaranTestItem[] = rawBerkas.map(
+    ({ kelas, ...berkas }) => ({
+      ...berkas,
+      dosen_id: kelas.dosen_id,
+      kelas_label: `#${berkas.kelas_id} ${kelas.matkul.kode} (${kelas.tahun_ajaran} ${kelas.semester})`,
+    }),
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-[12px] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] p-4">
@@ -186,20 +288,28 @@ async function TridharmaContent() {
         </h2>
         <ul className="flex flex-col gap-2">
           <PermissionItem
-            label="Lihat data Tridharma (View)"
+            label="Lihat data Tridharma publik (Publikasi, Kegiatan, HKI, Buku)"
             allowed={ownPerms.canView}
           />
           <PermissionItem
-            label="Tambah data Tridharma baru (Create)"
-            allowed={ownPerms.canCreate}
-          />
-          <PermissionItem
-            label="Edit & Hapus data milik sendiri"
+            label="CRUD data Tridharma milik sendiri (Publikasi, Kegiatan, HKI, Buku)"
             allowed={ownPerms.canManageOwn}
           />
           <PermissionItem
-            label="Edit & Hapus data dosen lain"
+            label="Edit & Hapus data Tridharma milik dosen lain"
             allowed={otherPerms.canUpdate || otherPerms.canDelete}
+          />
+          <PermissionItem
+            label="Pengajaran: Lihat Matkul, Kelas, & Berkas"
+            allowed={pengajaranPerms.canViewPengajaran}
+          />
+          <PermissionItem
+            label="Pengajaran: CRUD Mata Kuliah (Kaprodi & Staff Kaprodi)"
+            allowed={pengajaranPerms.canManageMatkul}
+          />
+          <PermissionItem
+            label="Pengajaran: CRUD Kelas & Berkas milik sendiri (khusus Dosen)"
+            allowed={pengajaranPerms.canManageOwnKelasBerkas}
           />
         </ul>
       </div>
@@ -209,7 +319,13 @@ async function TridharmaContent() {
         kegiatanItems={kegiatanItems}
         iprsItems={iprsItems}
         bukuItems={bukuItems}
+        matkulItems={matkulItems}
+        kelasItems={kelasItems}
+        berkasItems={berkasItems}
         canManage={ownPerms.canManageOwn}
+        canViewPengajaran={pengajaranPerms.canViewPengajaran}
+        canManageMatkul={pengajaranPerms.canManageMatkul}
+        canManageOwnKelasBerkas={pengajaranPerms.canManageOwnKelasBerkas}
         role={ownPerms.role}
         currentDosenId={dosenRow?.id ?? null}
         currentDosenNama={dosenRow?.nama ?? null}

@@ -61,7 +61,44 @@ export function evaluateRouteRbac(pathname: string, method: string, session: Loc
   const isAcc = isValidasiOrAccPath(pathname);
   const isWriteIntent = !isRead || hasPathSegment(pathname, WRITE_PAGE_SEGMENTS);
 
-  // 1. Modul 7: halaman /tridharma dan API /api/tridarma (PRD 5.6, 5.9). Tidak ada ACC/validasi di modul 7.
+  // 1a. Modul 7 bagian pengajaran (PRD 5.4): memakai aturan hak akses tersendiri.
+  // Mahasiswa & Umum tidak punya akses sama sekali (401 bila belum login, 403 bila sudah login).
+  // Matkul: Dosen lihat, Kaprodi & Staff Kaprodi CRUD.
+  // Kelas & Berkas Pengajaran: Dosen CRUD milik sendiri, Kaprodi & Staff Kaprodi lihat saja.
+  const isPengajaran =
+    matchesPrefix(pathname, "/api/tridarma/pengajaran") ||
+    matchesPrefix(pathname, "/api/tridharma/pengajaran");
+
+  if (isPengajaran) {
+    if (!isAuthenticated) {
+      return { allowed: false, reason: "unauthenticated", role };
+    }
+    if (role === "Mahasiswa" || role === "Umum") {
+      return { allowed: false, reason: "forbidden", role };
+    }
+
+    const isMatkulPath =
+      matchesPrefix(pathname, "/api/tridarma/pengajaran/matkul") ||
+      matchesPrefix(pathname, "/api/tridharma/pengajaran/matkul");
+
+    if (isWriteIntent) {
+      if (isMatkulPath) {
+        if (role === "Kaprodi" || isStaffKaprodiRole(role)) {
+          return { allowed: true, role };
+        }
+        return { allowed: false, reason: "forbidden", role };
+      }
+
+      if (role === "Dosen") {
+        return { allowed: true, role };
+      }
+      return { allowed: false, reason: "forbidden", role };
+    }
+
+    return { allowed: true, role };
+  }
+
+  // 1b. Modul 7: halaman /tridharma dan API /api/tridarma (PRD 5.6, 5.9). Tidak ada ACC/validasi di modul 7.
   const isTridharma =
     matchesPrefix(pathname, "/tridharma") || matchesPrefix(pathname, "/api/tridharma") || matchesPrefix(pathname, "/api/tridarma");
 
@@ -201,6 +238,46 @@ export function getTridharmaPermissions(session: LocalSessionPayload | null, own
     canManageOwn,
     canUpdate: canManageOwn && isOwner,
     canDelete: canManageOwn && isOwner,
+  };
+}
+
+/**
+ * Helper izin khusus bagian Pengajaran Modul 7 (PRD 5.4).
+ * - Matkul: lihat oleh Dosen/Kaprodi/Staff Kaprodi; tambah/ubah/hapus hanya oleh Kaprodi & Staff Kaprodi.
+ * - Kelas & Berkas Pengajaran: lihat oleh Dosen/Kaprodi/Staff Kaprodi; tambah/ubah/hapus hanya oleh Dosen (milik sendiri).
+ * - Mahasiswa & Umum tidak memiliki akses sama sekali.
+ */
+export function getPengajaranPermissions(
+  session: LocalSessionPayload | null,
+  ownerDosenId?: number | null,
+) {
+  const isAuthenticated = session !== null;
+  const role: AppRole = isAuthenticated ? normalizeRole(session.role) : "Umum";
+
+  const canViewPengajaran =
+    isAuthenticated &&
+    (role === "Dosen" || role === "Kaprodi" || isStaffKaprodiRole(role));
+  const canManageMatkul =
+    isAuthenticated && (role === "Kaprodi" || isStaffKaprodiRole(role));
+  const canManageOwnKelasBerkas = isAuthenticated && role === "Dosen";
+
+  const userDosenId = session?.dosen_id ?? null;
+  const isOwner =
+    canManageOwnKelasBerkas &&
+    userDosenId !== null &&
+    ownerDosenId !== undefined &&
+    ownerDosenId !== null &&
+    userDosenId === ownerDosenId;
+
+  return {
+    role,
+    isAuthenticated,
+    isOwner,
+    canViewPengajaran,
+    canManageMatkul,
+    canManageOwnKelasBerkas,
+    canUpdateKelasBerkas: isOwner,
+    canDeleteKelasBerkas: isOwner,
   };
 }
 

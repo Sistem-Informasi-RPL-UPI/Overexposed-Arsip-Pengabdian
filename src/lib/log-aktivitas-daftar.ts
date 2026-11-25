@@ -16,6 +16,9 @@ const OBJEK: readonly ObjekLog[] = [
   "kegiatan",
   "iprs",
   "publikasi",
+  "matkul",
+  "kelas",
+  "berkas_pengajaran",
 ];
 
 // Log dibaca orang di Indonesia, jadi batas hari pada filter tanggal memakai WIB (UTC+7, tanpa DST).

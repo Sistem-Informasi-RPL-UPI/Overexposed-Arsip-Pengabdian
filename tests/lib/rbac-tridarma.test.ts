@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { evaluateRouteRbac, getTridharmaPermissions } from "@/lib/rbac";
+import {
+  evaluateRouteRbac,
+  getPengajaranPermissions,
+  getTridharmaPermissions,
+} from "@/lib/rbac";
 import { sesi } from "../helpers/fixtures";
 
 function sesiDosen(role: string, dosenId: number | null) {
@@ -99,5 +103,99 @@ describe("RBAC rute modul 7 (lapisan proxy)", () => {
     expect(keputusan("/api/tridarma/publikasi/5/validasi", "GET", "Dosen")).toBe("izin");
     expect(keputusan("/api/tridarma/publikasi/5/validasi", "POST", "Dosen")).toBe("izin");
     expect(keputusan("/api/tridarma/publikasi/5/validasi", "POST", "Mahasiswa")).toBe("dilarang");
+  });
+
+  describe("RBAC khusus bagian pengajaran (PRD 5.4)", () => {
+    const semuaPathPengajaran = [
+      "/api/tridarma/pengajaran/matkul",
+      "/api/tridarma/pengajaran/matkul/1",
+      "/api/tridarma/pengajaran/kelas",
+      "/api/tridarma/pengajaran/kelas/1",
+      "/api/tridarma/pengajaran/berkas_pengajaran",
+      "/api/tridarma/pengajaran/berkas_pengajaran/1",
+    ];
+
+    it.each(semuaPathPengajaran)(
+      "GET & POST %s: tanpa sesi belum_login, Mahasiswa dan Umum dilarang",
+      (path) => {
+        for (const method of ["GET", "POST", "PATCH", "DELETE"]) {
+          expect(keputusan(path, method, null)).toBe("belum_login");
+          expect(keputusan(path, method, "Mahasiswa")).toBe("dilarang");
+          expect(keputusan(path, method, "Umum")).toBe("dilarang");
+        }
+      },
+    );
+
+    it.each(semuaPathPengajaran)(
+      "GET %s: Dosen, Kaprodi, Staff_Kaprodi, dan Admin diizinkan",
+      (path) => {
+        for (const peran of ["Dosen", "Kaprodi", "Staff_Kaprodi", "Admin"]) {
+          expect(keputusan(path, "GET", peran)).toBe("izin");
+        }
+      },
+    );
+
+    it("tulis matkul: hanya Kaprodi, Staff_Kaprodi, dan Admin; Dosen dilarang", () => {
+      for (const method of ["POST", "PATCH", "DELETE"]) {
+        expect(keputusan("/api/tridarma/pengajaran/matkul", method, "Kaprodi")).toBe("izin");
+        expect(keputusan("/api/tridarma/pengajaran/matkul/1", method, "Staff_Kaprodi")).toBe("izin");
+        expect(keputusan("/api/tridarma/pengajaran/matkul/1", method, "Admin")).toBe("izin");
+        expect(keputusan("/api/tridarma/pengajaran/matkul", method, "Dosen")).toBe("dilarang");
+      }
+    });
+
+    it.each([
+      "/api/tridarma/pengajaran/kelas",
+      "/api/tridarma/pengajaran/kelas/1",
+      "/api/tridarma/pengajaran/berkas_pengajaran",
+      "/api/tridarma/pengajaran/berkas_pengajaran/1",
+    ])("tulis %s: hanya Dosen; Kaprodi dan Staff_Kaprodi dilarang", (path) => {
+      for (const method of ["POST", "PATCH", "DELETE"]) {
+        expect(keputusan(path, method, "Dosen")).toBe("izin");
+        expect(keputusan(path, method, "Kaprodi")).toBe("dilarang");
+        expect(keputusan(path, method, "Staff_Kaprodi")).toBe("dilarang");
+        expect(keputusan(path, method, "Admin")).toBe("dilarang");
+      }
+    });
+  });
+});
+
+describe("getPengajaranPermissions", () => {
+  it("Kaprodi dan Staff_Kaprodi boleh kelola matkul tetapi tidak boleh kelola kelas/berkas", () => {
+    for (const peran of ["Kaprodi", "Staff_Kaprodi", "Admin"]) {
+      expect(getPengajaranPermissions(sesiDosen(peran, 7), 7)).toMatchObject({
+        canViewPengajaran: true,
+        canManageMatkul: true,
+        canManageOwnKelasBerkas: false,
+        canUpdateKelasBerkas: false,
+        canDeleteKelasBerkas: false,
+      });
+    }
+  });
+
+  it("Dosen boleh lihat pengajaran dan kelola kelas/berkas milik sendiri, tidak boleh kelola matkul", () => {
+    expect(getPengajaranPermissions(sesiDosen("Dosen", 7), 7)).toMatchObject({
+      canViewPengajaran: true,
+      canManageMatkul: false,
+      canManageOwnKelasBerkas: true,
+      isOwner: true,
+      canUpdateKelasBerkas: true,
+      canDeleteKelasBerkas: true,
+    });
+    expect(getPengajaranPermissions(sesiDosen("Dosen", 7), 99)).toMatchObject({
+      isOwner: false,
+      canUpdateKelasBerkas: false,
+      canDeleteKelasBerkas: false,
+    });
+  });
+
+  it("Mahasiswa, Umum, dan tanpa sesi ditolak semua akses pengajaran", () => {
+    for (const s of [null, sesiDosen("Mahasiswa", null), sesiDosen("Umum", null)]) {
+      expect(getPengajaranPermissions(s)).toMatchObject({
+        canViewPengajaran: false,
+        canManageMatkul: false,
+        canManageOwnKelasBerkas: false,
+      });
+    }
   });
 });

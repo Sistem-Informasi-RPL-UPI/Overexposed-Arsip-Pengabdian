@@ -8,18 +8,30 @@ import {
   type KegiatanTestItem,
 } from "@/components/KegiatanTestPanel";
 import {
+  PengajaranTestPanel,
+  type BerkasPengajaranTestItem,
+  type KelasTestItem,
+  type MatkulTestItem,
+} from "@/components/PengajaranTestPanel";
+import {
   PublikasiTestPanel,
   type PublikasiTestItem,
 } from "@/components/PublikasiTestPanel";
 
-type TabKey = "publikasi" | "kegiatan" | "iprs" | "buku";
+type TabKey = "publikasi" | "kegiatan" | "iprs" | "buku" | "pengajaran";
 
 export function TridharmaTestTabs({
   publikasiItems,
   kegiatanItems,
   iprsItems,
   bukuItems,
+  matkulItems,
+  kelasItems,
+  berkasItems,
   canManage,
+  canViewPengajaran,
+  canManageMatkul,
+  canManageOwnKelasBerkas,
   role,
   currentDosenId,
   currentDosenNama,
@@ -28,7 +40,13 @@ export function TridharmaTestTabs({
   kegiatanItems: KegiatanTestItem[];
   iprsItems: IprsTestItem[];
   bukuItems: BukuTestItem[];
+  matkulItems: MatkulTestItem[];
+  kelasItems: KelasTestItem[];
+  berkasItems: BerkasPengajaranTestItem[];
   canManage: boolean;
+  canViewPengajaran: boolean;
+  canManageMatkul: boolean;
+  canManageOwnKelasBerkas: boolean;
   role: string;
   currentDosenId: number | null;
   currentDosenNama: string | null;
@@ -44,6 +62,11 @@ export function TridharmaTestTabs({
     },
     { key: "iprs", label: "HKI / IPRS", count: iprsItems.length },
     { key: "buku", label: "Buku", count: bukuItems.length },
+    {
+      key: "pengajaran",
+      label: "Pengajaran (Matkul, Kelas, Berkas)",
+      count: matkulItems.length + kelasItems.length + berkasItems.length,
+    },
   ];
 
   return (
@@ -125,6 +148,18 @@ export function TridharmaTestTabs({
             items={bukuItems}
             canManage={canManage}
             role={role}
+            currentDosenId={currentDosenId}
+          />
+        )}
+        {activeTab === "pengajaran" && (
+          <PengajaranTestPanel
+            matkulItems={matkulItems}
+            kelasItems={kelasItems}
+            berkasItems={berkasItems}
+            role={role}
+            canViewPengajaran={canViewPengajaran}
+            canManageMatkul={canManageMatkul}
+            canManageOwnKelasBerkas={canManageOwnKelasBerkas}
             currentDosenId={currentDosenId}
           />
         )}
