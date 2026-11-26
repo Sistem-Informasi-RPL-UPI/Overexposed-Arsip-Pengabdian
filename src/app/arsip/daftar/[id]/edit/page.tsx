@@ -4,31 +4,9 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireArsipViewer } from "@/lib/arsip";
 import FormulirArsipForm, {
-  type ExistingFile,
   type KategoriOption,
   type Values,
 } from "@/components/Arsip/DaftarArsip/formulirarsipform";
-
-/* Sementara: cari kolom berkas dari nama-nama umum.
-   Setelah tahu nama kolom aslinya, ganti dengan akses langsung (lihat catatan di bawah). */
-function getExistingFile(arsip: object): ExistingFile {
-  const rec = arsip as Record<string, unknown>;
-  const raw = [
-    rec.file_path,
-    rec.file_url,
-    rec.berkas_path,
-    rec.berkas_url,
-    rec.file_name,
-    rec.nama_file,
-  ].find((v): v is string => typeof v === "string" && v.length > 0);
-
-  if (!raw) return null;
-
-  return {
-    name: raw.split("/").pop() ?? "berkas",
-    url: /^https?:\/\//.test(raw) ? raw : undefined,
-  };
-}
 
 async function EditContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -69,6 +47,7 @@ async function EditContent({ params }: { params: Promise<{ id: string }> }) {
     tanggalArsip: new Date(arsip.tanggal_arsip).toISOString().slice(0, 10),
     nomorArsip: arsip.nomor_arsip ?? "",
     nomorSurat: arsip.nomor_surat ?? "",
+    linkBerkas: arsip.link_berkas ?? "",
     keterangan: arsip.keterangan ?? "",
   };
 
@@ -77,9 +56,8 @@ async function EditContent({ params }: { params: Promise<{ id: string }> }) {
       mode="edit"
       arsipId={String(arsip.id)}
       kategori={kategori}
-      penciptaUnit={arsip.pencipta_unit ?? "-"}
+      penciptaUnit={arsip.pencipta_unit ?? ""}
       initialValues={initialValues}
-      existingFile={getExistingFile(arsip)}
     />
   );
 }
