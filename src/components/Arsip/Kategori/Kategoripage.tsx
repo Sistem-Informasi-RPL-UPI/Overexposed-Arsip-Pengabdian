@@ -2,21 +2,25 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Eye, FolderOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Eye,
+  FileStack,
+  FolderOpen,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import ConfirmDeleteDialog from "../ConfirmDeletedialog";
+import DataTable, { type DataTableColumn } from "../DataTable";
 
 export type KategoriArsip = {
   id: string | number;
@@ -24,6 +28,8 @@ export type KategoriArsip = {
   nama: string;
   retensiAktif: number;
   retensiInaktif: number;
+  jumlahArsip: number;
+  keterangan?: string | null;
 };
 
 export interface KategoriArsipPageProps {
@@ -32,6 +38,7 @@ export interface KategoriArsipPageProps {
   /** Opsional. Kalau diisi, halaman dikontrol dari luar. Kalau tidak, komponen mengelola sendiri. */
   page?: number;
   pageSize?: number;
+  canManage?: boolean;
   onPageChange?: (page: number) => void;
   onAdd?: () => void;
   onView?: (item: KategoriArsip) => void;
@@ -39,23 +46,6 @@ export interface KategoriArsipPageProps {
   /** Dipanggil setelah kategori berhasil dihapus. */
   onDelete?: (item: KategoriArsip) => void;
   className?: string;
-}
-
-function getPageItems(
-  page: number,
-  totalPages: number,
-): (number | "ellipsis")[] {
-  if (totalPages <= 5) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-
-  if (page <= 3) return [1, 2, 3, "ellipsis", totalPages];
-
-  if (page >= totalPages - 2) {
-    return [1, "ellipsis", totalPages - 2, totalPages - 1, totalPages];
-  }
-
-  return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
 }
 
 type KategoriApiResponse = {
@@ -67,6 +57,9 @@ type KategoriApiResponse = {
     retensi_inaktif_tahun?: number;
     retensiAktif?: number;
     retensiInaktif?: number;
+    jumlah_arsip?: number;
+    jumlahArsip?: number;
+    keterangan?: string | null;
   }>;
   pagination?: {
     totalItems?: number;
@@ -84,6 +77,7 @@ export function KategoriArsipPage({
   totalItems,
   page: pageProp,
   pageSize = 6,
+  canManage = true,
   onPageChange,
   onView,
   onEdit,
@@ -99,12 +93,29 @@ export function KategoriArsipPage({
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
 
+  // Detail kategori modal
+  const [viewTarget, setViewTarget] = React.useState<KategoriArsip | null>(
+    null,
+  );
+
+  // Edit kategori modal
+  const [editTarget, setEditTarget] = React.useState<KategoriArsip | null>(
+    null,
+  );
+  const [editForm, setEditForm] = React.useState({
+    kode: "",
+    nama: "",
+    retensiAktif: 1,
+    retensiInaktif: 1,
+  });
+  const [savingEdit, setSavingEdit] = React.useState(false);
+
   // Hapus kategori
   const [deleteTarget, setDeleteTarget] = React.useState<KategoriArsip | null>(
     null,
   );
   const [deleting, setDeleting] = React.useState(false);
-  // Dinaikkan setelah hapus supaya data dimuat ulang
+  // Dinaikkan setelah ubah/hapus supaya data dimuat ulang
   const [reloadKey, setReloadKey] = React.useState(0);
 
   // Halaman aktif: pakai props kalau dikontrol dari luar, kalau tidak pakai state sendiri
@@ -146,13 +157,15 @@ export function KategoriArsipPage({
           throw new Error(result.message ?? "Gagal mengambil data kategori.");
         }
 
-        const items = (result.items ?? []).map((item) => ({
+        const items: KategoriArsip[] = (result.items ?? []).map((item) => ({
           id: item.id,
           kode: item.kode,
           nama: item.nama,
           retensiAktif: item.retensi_aktif_tahun ?? item.retensiAktif ?? 0,
           retensiInaktif:
             item.retensi_inaktif_tahun ?? item.retensiInaktif ?? 0,
+          jumlahArsip: item.jumlah_arsip ?? item.jumlahArsip ?? 0,
+          keterangan: item.keterangan ?? null,
         }));
 
         setKategoriData(items);
@@ -183,6 +196,76 @@ export function KategoriArsipPage({
     return () => controller.abort();
   }, [data, totalItems, page, pageSize, reloadKey]);
 
+  function handleViewClick(item: KategoriArsip) {
+    onView?.(item);
+    setViewTarget(item);
+  }
+
+  function handleEditClick(item: KategoriArsip) {
+    if (onEdit) {
+      onEdit(item);
+      return;
+    }
+    setEditTarget(item);
+    setEditForm({
+      kode: item.kode,
+      nama: item.nama,
+      retensiAktif: item.retensiAktif,
+      retensiInaktif: item.retensiInaktif,
+    });
+  }
+
+  async function submitEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editTarget || savingEdit) return;
+    setSavingEdit(true);
+
+    try {
+      const res = await fetch(
+        `/api/arsip/kategori/${encodeURIComponent(String(editTarget.id))}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kode: editForm.kode.trim(),
+            nama: editForm.nama.trim(),
+            retensi_aktif_tahun: Number(editForm.retensiAktif),
+            retensi_inaktif_tahun: Number(editForm.retensiInaktif),
+          }),
+        },
+      );
+      const result = (await res.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (!res.ok) {
+        toast.error("Kategori gagal diperbarui", {
+          description:
+            result?.message ?? "Terjadi kesalahan saat memperbarui kategori.",
+        });
+        return;
+      }
+
+      toast.success("Kategori berhasil diperbarui", {
+        description:
+          result?.message ?? `"${editForm.nama}" telah diperbarui.`,
+      });
+      setEditTarget(null);
+
+      if (data !== undefined) {
+        router.refresh();
+      } else {
+        setReloadKey((k) => k + 1);
+      }
+    } catch {
+      toast.error("Kategori gagal diperbarui", {
+        description: "Tidak dapat terhubung ke server. Coba lagi.",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function confirmDelete() {
     if (!deleteTarget || deleting) return;
     const target = deleteTarget;
@@ -211,10 +294,8 @@ export function KategoriArsipPage({
       onDelete?.(target);
 
       if (data !== undefined) {
-        // Data dikirim dari luar (server component): minta server ambil ulang
         router.refresh();
       } else if (kategoriData.length === 1 && page > 1) {
-        // Item terakhir di halaman ini terhapus: mundur satu halaman
         handlePageChange(page - 1);
       } else {
         setReloadKey((k) => k + 1);
@@ -247,6 +328,97 @@ export function KategoriArsipPage({
   const from = filtered.length ? (page - 1) * pageSize + 1 : 0;
   const to = filtered.length ? Math.min(from + filtered.length - 1, total) : 0;
 
+  const columns: DataTableColumn<KategoriArsip>[] = [
+    {
+      key: "kode",
+      header: "Kode",
+      headerClassName: "w-32",
+      cellClassName: "py-5",
+      render: (item) => (
+        <span className="inline-flex rounded bg-[#e2e7ff] px-2.5 py-0.5 font-mono text-[13px] font-bold leading-5 text-[#00288e]">
+          {item.kode}
+        </span>
+      ),
+    },
+    {
+      key: "nama",
+      header: "Nama Kategori",
+      cellClassName: "py-5 text-base font-semibold leading-6 text-[#131b2e]",
+      render: (item) => item.nama,
+    },
+    {
+      key: "jumlahArsip",
+      header: "Jumlah Arsip",
+      headerClassName: "w-44",
+      cellClassName: "py-5",
+      render: (item) => (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f2f3ff] px-3 py-1 text-xs font-bold text-[#00288e]">
+          <FileStack className="size-3.5" aria-hidden />
+          {item.jumlahArsip} Arsip
+        </span>
+      ),
+    },
+    {
+      key: "retensi",
+      header: "Retensi",
+      headerClassName: "w-56",
+      cellClassName: "py-4 text-sm leading-[22.75px] text-[#444653]",
+      render: (item) => (
+        <>
+          <p>• Aktif: {item.retensiAktif} Tahun</p>
+          <p>• Inaktif: {item.retensiInaktif} Tahun</p>
+        </>
+      ),
+    },
+    {
+      key: "aksi",
+      header: "Aksi",
+      align: "right",
+      headerClassName: "w-44",
+      cellClassName: "py-5",
+      render: (item) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Lihat ${item.nama}`}
+            onClick={() => handleViewClick(item)}
+            className="size-7 rounded-lg text-[#00288e] hover:bg-[#e2e7ff] hover:text-[#00288e]"
+          >
+            <Eye className="size-4.5" />
+          </Button>
+
+          {canManage && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Edit ${item.nama}`}
+                onClick={() => handleEditClick(item)}
+                className="size-7 rounded-lg text-[#00288e] hover:bg-[#e2e7ff] hover:text-[#00288e]"
+              >
+                <Pencil className="size-4" />
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Hapus ${item.nama}`}
+                onClick={() => setDeleteTarget(item)}
+                className="size-7 rounded-lg text-[#ba1a1a] hover:bg-[#ba1a1a]/10 hover:text-[#ba1a1a]"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div
       className={cn("flex w-full flex-col gap-6 bg-[#faf8ff] p-6", className)}
@@ -257,13 +429,15 @@ export function KategoriArsipPage({
           Kategori Arsip
         </h1>
 
-        <Link
-          href="/arsip/kategori/formulir"
-          className="inline-flex h-auto items-center gap-2 rounded-xl bg-[#1e40af] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_1px_1px_rgba(0,0,0,0.05)] hover:bg-[#1e40af]/90"
-        >
-          <Plus className="size-3 stroke-[2.5]" />
-          Tambah Kategori
-        </Link>
+        {canManage && (
+          <Link
+            href="/arsip/kategori/formulir"
+            className="inline-flex h-auto items-center gap-2 rounded-xl bg-[#1e40af] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_1px_1px_rgba(0,0,0,0.05)] hover:bg-[#1e40af]/90"
+          >
+            <Plus className="size-3 stroke-[2.5]" />
+            Tambah Kategori
+          </Link>
+        )}
       </div>
 
       {/* Search bar */}
@@ -281,196 +455,309 @@ export function KategoriArsipPage({
       </div>
 
       {/* Data table card */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center justify-between border-b border-[#eaedff] px-6 py-4">
-          <div className="flex items-center gap-2">
-            <FolderOpen className="size-5 text-[#00288e]" />
-
-            <h2 className="text-base font-semibold leading-6 text-[#131b2e]">
-              Data Klasifikasi Kategori Arsip
-            </h2>
-          </div>
-
+      <DataTable
+        icon={<FolderOpen className="size-5 text-[#00288e]" aria-hidden />}
+        title="Data Klasifikasi Kategori Arsip"
+        headerActions={
           <p className="text-[11px] font-bold tracking-[0.44px] text-[#444653]">
             Total:{" "}
             <span className="font-semibold text-[#00288e]">
               {total} Kategori
             </span>
           </p>
-        </div>
+        }
+        columns={columns}
+        data={filtered}
+        getRowKey={(item) => item.id}
+        loading={loading}
+        loadingMessage="Memuat data kategori..."
+        error={error}
+        emptyState={
+          query.trim()
+            ? {
+                icon: <Search className="size-6" aria-hidden />,
+                title: "Kategori tidak ditemukan",
+                description: `Tidak ada kode atau nama kategori yang cocok dengan "${query.trim()}".`,
+                action: (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setQuery("")}
+                    className="h-10 rounded-lg bg-[#eaedff] px-4 text-xs font-semibold text-[#131b2e] hover:bg-[#dde1ff]"
+                  >
+                    Reset Pencarian
+                  </Button>
+                ),
+              }
+            : {
+                icon: <FolderOpen className="size-6" aria-hidden />,
+                title: "Belum ada kategori klasifikasi arsip",
+                description: canManage
+                  ? "Buat kategori klasifikasi dan jadwal retensi arsip (JRA) pertama sebelum mulai menginput berkas arsip."
+                  : "Belum ada kategori klasifikasi yang ditambahkan oleh staf program studi.",
+                action: canManage ? (
+                  <Link
+                    href="/arsip/kategori/formulir"
+                    className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-[#1e40af] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]"
+                  >
+                    <Plus className="size-3.5 stroke-[2.5]" aria-hidden />
+                    Tambah Kategori Pertama
+                  </Link>
+                ) : undefined,
+              }
+        }
+        pagination={{
+          page,
+          totalPages,
+          from,
+          to,
+          total,
+          itemLabel: "kategori",
+          disabled: loading,
+          onPageChange: handlePageChange,
+        }}
+      />
 
-        <Table>
-          <TableHeader>
-            <TableRow className="border-0 bg-[#f2f3ff] hover:bg-[#f2f3ff]">
-              <TableHead className="h-auto w-32 px-6 py-3.5 text-xs font-bold uppercase tracking-[0.6px] text-[#444653]">
-                Kode
-              </TableHead>
-
-              <TableHead className="h-auto px-6 py-3.5 text-xs font-bold uppercase tracking-[0.6px] text-[#444653]">
-                Nama Kategori
-              </TableHead>
-
-              <TableHead className="h-auto w-64 px-6 py-3.5 text-xs font-bold uppercase tracking-[0.6px] text-[#444653]">
-                Retensi
-              </TableHead>
-
-              <TableHead className="h-auto w-48 px-6 py-3.5 text-right text-xs font-bold uppercase tracking-[0.6px] text-[#444653]">
-                Aksi
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="px-6 py-10 text-center text-sm text-[#757684]"
-                >
-                  Memuat data kategori...
-                </TableCell>
-              </TableRow>
-            ) : error ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="px-6 py-10 text-center text-sm text-red-600"
-                >
-                  {error}
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="px-6 py-10 text-center text-sm text-[#757684]"
-                >
-                  Tidak ada kategori yang cocok.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((item) => (
-                <TableRow
-                  key={item.id}
-                  className="border-t border-[#eaedff] hover:bg-[#f2f3ff]/40"
-                >
-                  <TableCell className="px-6 py-6">
-                    <span className="inline-flex rounded bg-[#e2e7ff] px-2.5 py-px font-mono text-[13px] font-bold leading-5.5 text-[#00288e]">
-                      {item.kode}
-                    </span>
-                  </TableCell>
-
-                  <TableCell className="px-6 py-6 text-base font-semibold leading-6 text-[#131b2e]">
-                    {item.nama}
-                  </TableCell>
-
-                  <TableCell className="px-6 py-4 text-sm leading-[22.75px] text-[#444653]">
-                    <p>• Aktif: {item.retensiAktif} Tahun</p>
-                    <p>• Inaktif: {item.retensiInaktif} Tahun</p>
-                  </TableCell>
-
-                  <TableCell className="px-6 py-6">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Lihat ${item.nama}`}
-                        onClick={() => onView?.(item)}
-                        className="size-6.75 rounded-lg text-[#0101b7] hover:bg-[#e2e7ff] hover:text-[#0101b7]"
-                      >
-                        <Eye className="size-5" />
-                      </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${item.nama}`}
-                        onClick={() => onEdit?.(item)}
-                        className="size-6.75 rounded-lg text-[#757684] hover:bg-[#e2e7ff] hover:text-[#444653]"
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Hapus ${item.nama}`}
-                        onClick={() => setDeleteTarget(item)}
-                        className="size-6.75 rounded-lg text-[#ba1a1a] hover:bg-[#ba1a1a]/10 hover:text-[#ba1a1a]"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t border-[#eaedff] bg-[#f2f3ff]/40 px-6 py-4">
-          <p className="text-[13px] leading-4.5 text-[#444653]">
-            Menampilkan{" "}
-            <span className="text-xs font-semibold tracking-[0.24px] text-[#131b2e]">
-              {from} - {to}
-            </span>{" "}
-            dari{" "}
-            <span className="text-xs font-semibold tracking-[0.24px] text-[#131b2e]">
-              {total}
-            </span>{" "}
-            kategori
-          </p>
-
-          <nav aria-label="Pagination" className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              disabled={page <= 1 || loading}
-              onClick={() => handlePageChange(page - 1)}
-              className="h-auto rounded-lg bg-[#eaedff] px-3 py-1 text-[11px] font-bold tracking-[0.44px] text-[#757684] hover:bg-[#eaedff] disabled:opacity-50"
-            >
-              {"< Sebelumnya"}
-            </Button>
-
-            {getPageItems(page, totalPages).map((p, i) =>
-              p === "ellipsis" ? (
-                <span
-                  key={`e-${i}`}
-                  className="px-2 text-[11px] font-bold tracking-[0.44px] text-[#757684]"
-                >
-                  ...
+      {/* Dialog Detail Kategori */}
+      {viewTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="detail-kategori-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setViewTarget(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex rounded bg-[#e2e7ff] px-2.5 py-0.5 font-mono text-xs font-bold text-[#00288e]">
+                  {viewTarget.kode}
                 </span>
-              ) : (
-                <Button
-                  key={p}
-                  variant="ghost"
-                  disabled={loading}
-                  onClick={() => handlePageChange(p)}
-                  aria-current={p === page ? "page" : undefined}
-                  className={cn(
-                    "h-auto rounded-lg px-3 py-1 text-[11px] tracking-[0.44px]",
-                    p === page
-                      ? "bg-[#00288e] font-semibold text-white hover:bg-[#00288e] hover:text-white"
-                      : "font-bold text-[#444653] hover:bg-[#eaedff]",
-                  )}
+                <h2
+                  id="detail-kategori-title"
+                  className="mt-2 text-xl font-bold text-[#131b2e]"
                 >
-                  {p}
-                </Button>
-              ),
-            )}
+                  {viewTarget.nama}
+                </h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Tutup detail kategori"
+                onClick={() => setViewTarget(null)}
+                className="rounded-lg p-1.5 text-[#444653] hover:bg-[#f2f3ff]"
+              >
+                <X className="size-4.5" />
+              </button>
+            </div>
 
-            <Button
-              variant="ghost"
-              disabled={page >= totalPages || loading}
-              onClick={() => handlePageChange(page + 1)}
-              className="h-auto rounded-lg px-3 py-1 text-[11px] font-bold tracking-[0.44px] text-[#444653] hover:bg-[#eaedff]"
-            >
-              {"Selanjutnya >"}
-            </Button>
-          </nav>
+            <dl className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-[#f2f3ff] p-3.5">
+                <dt className="text-xs font-semibold text-[#444653]">
+                  Retensi Aktif
+                </dt>
+                <dd className="mt-1 text-base font-bold text-[#131b2e]">
+                  {viewTarget.retensiAktif} Tahun
+                </dd>
+              </div>
+              <div className="rounded-xl bg-[#f2f3ff] p-3.5">
+                <dt className="text-xs font-semibold text-[#444653]">
+                  Retensi Inaktif
+                </dt>
+                <dd className="mt-1 text-base font-bold text-[#131b2e]">
+                  {viewTarget.retensiInaktif} Tahun
+                </dd>
+              </div>
+              <div className="col-span-2 flex items-center justify-between rounded-xl bg-[#f2f3ff] p-3.5">
+                <div>
+                  <dt className="text-xs font-semibold text-[#444653]">
+                    Jumlah Arsip Terkait
+                  </dt>
+                  <dd className="mt-0.5 text-base font-bold text-[#00288e]">
+                    {viewTarget.jumlahArsip} Berkas Arsip
+                  </dd>
+                </div>
+                <Link
+                  href={`/arsip/daftar?kategoriId=${encodeURIComponent(
+                    String(viewTarget.id),
+                  )}`}
+                  className="rounded-lg bg-[#00288e] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#001f6f]"
+                >
+                  Lihat Daftar Arsip
+                </Link>
+              </div>
+            </dl>
+
+            <div className="mt-6 flex justify-end gap-2">
+              {canManage && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    const target = viewTarget;
+                    setViewTarget(null);
+                    handleEditClick(target);
+                  }}
+                  className="rounded-lg bg-[#eaedff] px-4 text-xs font-semibold text-[#131b2e] hover:bg-[#dde1ff]"
+                >
+                  Ubah Kategori
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={() => setViewTarget(null)}
+                className="rounded-lg bg-[#1e40af] px-4 text-xs font-semibold text-white hover:bg-[#1e3a9f]"
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Dialog Edit Kategori */}
+      {editTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-kategori-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingEdit) {
+              setEditTarget(null);
+            }
+          }}
+        >
+          <form
+            onSubmit={submitEdit}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between">
+              <h2
+                id="edit-kategori-title"
+                className="text-xl font-bold text-[#131b2e]"
+              >
+                Ubah Kategori Arsip
+              </h2>
+              <button
+                type="button"
+                disabled={savingEdit}
+                aria-label="Tutup form ubah kategori"
+                onClick={() => setEditTarget(null)}
+                className="rounded-lg p-1.5 text-[#444653] hover:bg-[#f2f3ff]"
+              >
+                <X className="size-4.5" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-kode" className="text-xs font-semibold">
+                  Kode Klasifikasi
+                </Label>
+                <Input
+                  id="edit-kode"
+                  required
+                  value={editForm.kode}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, kode: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-nama" className="text-xs font-semibold">
+                  Nama Kategori
+                </Label>
+                <Input
+                  id="edit-nama"
+                  required
+                  value={editForm.nama}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, nama: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label
+                    htmlFor="edit-retensi-aktif"
+                    className="text-xs font-semibold"
+                  >
+                    Retensi Aktif (Tahun)
+                  </Label>
+                  <Input
+                    id="edit-retensi-aktif"
+                    type="number"
+                    min={1}
+                    required
+                    value={editForm.retensiAktif}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        retensiAktif: Number(e.target.value),
+                      }))
+                    }
+                    className="h-10"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label
+                    htmlFor="edit-retensi-inaktif"
+                    className="text-xs font-semibold"
+                  >
+                    Retensi Inaktif (Tahun)
+                  </Label>
+                  <Input
+                    id="edit-retensi-inaktif"
+                    type="number"
+                    min={1}
+                    required
+                    value={editForm.retensiInaktif}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        retensiInaktif: Number(e.target.value),
+                      }))
+                    }
+                    className="h-10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={savingEdit}
+                onClick={() => setEditTarget(null)}
+                className="rounded-lg bg-[#eaedff] px-4 text-xs font-semibold text-[#131b2e] hover:bg-[#dde1ff]"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingEdit}
+                className="rounded-lg bg-[#1e40af] px-4 text-xs font-semibold text-white hover:bg-[#1e3a9f]"
+              >
+                {savingEdit ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  "Simpan Perubahan"
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <ConfirmDeleteDialog
         open={deleteTarget !== null}

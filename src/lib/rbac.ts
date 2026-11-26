@@ -45,7 +45,12 @@ function isKategoriPath(pathname: string): boolean {
 }
 
 function isLogAktivitasPath(pathname: string): boolean {
-  return matchesPrefix(pathname, "/api/log-aktivitas") || matchesPrefix(pathname, "/arsip/log-aktivitas");
+  return (
+    matchesPrefix(pathname, "/api/log-aktivitas") ||
+    matchesPrefix(pathname, "/log") ||
+    matchesPrefix(pathname, "/arsip/log") ||
+    matchesPrefix(pathname, "/arsip/log-aktivitas")
+  );
 }
 
 /**

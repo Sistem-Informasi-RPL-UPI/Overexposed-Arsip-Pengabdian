@@ -3,8 +3,6 @@
 import * as React from "react";
 import {
   Calendar,
-  ChevronLeft,
-  ChevronRight,
   CirclePlus,
   FileClock,
   FilePen,
@@ -22,15 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import DataTable, { type DataTableColumn } from "../DataTable";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -119,13 +110,48 @@ const AKSI_STYLE: Record<
   AksiLog,
   { label: string; bg: string; dot: string; text: string }
 > = {
-  tambah: { label: "Tambah", bg: "bg-[#6ffbbe]", dot: "bg-[#00563a]", text: "text-[#30976e]" },
-  edit: { label: "Edit", bg: "bg-[#c9e6ff]", dot: "bg-[#006591]", text: "text-[#004c6e]" },
-  hapus: { label: "Hapus", bg: "bg-[#ffdad6]", dot: "bg-[#ba1a1a]", text: "text-[#ba1a1a]" },
-  validasi: { label: "Validasi", bg: "bg-[#e2e7ff]", dot: "bg-[#1e40af]", text: "text-[#1e40af]" },
-  sinkron: { label: "Sinkron", bg: "bg-[#fff1c2]", dot: "bg-[#8a6100]", text: "text-[#8a6100]" },
-  login: { label: "Login", bg: "bg-[#eaedff]", dot: "bg-[#444653]", text: "text-[#444653]" },
-  login_gagal: { label: "Login Gagal", bg: "bg-[#ffdad6]", dot: "bg-[#ba1a1a]", text: "text-[#ba1a1a]" },
+  tambah: {
+    label: "Tambah",
+    bg: "bg-[#6ffbbe]",
+    dot: "bg-[#00563a]",
+    text: "text-[#00563a]",
+  },
+  edit: {
+    label: "Edit",
+    bg: "bg-[#c9e6ff]",
+    dot: "bg-[#006591]",
+    text: "text-[#004c6e]",
+  },
+  hapus: {
+    label: "Hapus",
+    bg: "bg-[#ffdad6]",
+    dot: "bg-[#ba1a1a]",
+    text: "text-[#ba1a1a]",
+  },
+  validasi: {
+    label: "Validasi",
+    bg: "bg-[#e2e7ff]",
+    dot: "bg-[#1e40af]",
+    text: "text-[#1e40af]",
+  },
+  sinkron: {
+    label: "Sinkron",
+    bg: "bg-[#fff1c2]",
+    dot: "bg-[#8a6100]",
+    text: "text-[#8a6100]",
+  },
+  login: {
+    label: "Login",
+    bg: "bg-[#eaedff]",
+    dot: "bg-[#444653]",
+    text: "text-[#444653]",
+  },
+  login_gagal: {
+    label: "Login Gagal",
+    bg: "bg-[#ffdad6]",
+    dot: "bg-[#ba1a1a]",
+    text: "text-[#ba1a1a]",
+  },
 };
 
 const dateFmt = new Intl.DateTimeFormat("id-ID", {
@@ -151,17 +177,6 @@ function formatTanggal(iso: string) {
   };
 }
 
-function getPageItems(page: number, totalPages: number): (number | "ellipsis")[] {
-  if (totalPages <= 5) {
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  }
-  if (page <= 3) return [1, 2, 3, "ellipsis", totalPages];
-  if (page >= totalPages - 2) {
-    return [1, "ellipsis", totalPages - 2, totalPages - 1, totalPages];
-  }
-  return [1, "ellipsis", page - 1, page, page + 1, "ellipsis", totalPages];
-}
-
 const STAT_CARDS = [
   {
     key: "total",
@@ -174,7 +189,7 @@ const STAT_CARDS = [
   {
     key: "tambah",
     label: "Aktivitas Tambah",
-    suffix: "Arsip Baru",
+    suffix: "Data Baru",
     icon: CirclePlus,
     iconBg: "bg-[#6ffbbe]",
     iconColor: "text-[#00563a]",
@@ -196,9 +211,6 @@ const STAT_CARDS = [
     iconColor: "text-[#ba1a1a]",
   },
 ] as const;
-
-const headClass =
-  "h-auto px-4 py-3.5 text-xs font-bold tracking-[0.24px] text-[#444653]";
 
 const selectTriggerClass =
   "h-10 w-auto min-w-[140px] gap-2 rounded-lg border-0 bg-[#f2f3ff] px-3 text-xs font-semibold tracking-[0.24px] text-[#131b2e] shadow-none focus-visible:ring-1 focus-visible:ring-[#1e40af]";
@@ -278,14 +290,13 @@ export function LogAktivitasPage({ className }: { className?: string }) {
   }, [q, aksi, rentang, page]);
 
   // 2) Kartu Tambah / Edit / Hapus: total dari filter aksi masing-masing.
-  //    Mengikuti rentang waktu dan pencarian, tidak mengikuti filter aksi dan halaman.
   React.useEffect(() => {
     const controller = new AbortController();
 
     async function hitung(aksiBackend: string): Promise<number> {
       const params = new URLSearchParams({
         page: "1",
-        pageSize: "1", // cukup 1 baris, yang dibutuhkan hanya pagination.total
+        pageSize: "1",
         aksi: aksiBackend,
       });
       const dari = dariRentang(rentang);
@@ -330,8 +341,106 @@ export function LogAktivitasPage({ className }: { className?: string }) {
     setPage(1);
   };
 
+  const columns: DataTableColumn<LogAktivitas>[] = [
+    {
+      key: "waktu",
+      header: "Waktu Aktivitas",
+      headerClassName: "w-[140px]",
+      render: (row) => {
+        const { tanggal, jam } = formatTanggal(row.waktu);
+        return (
+          <>
+            <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-[#131b2e]">
+              {tanggal}
+            </p>
+            <p className="text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653]">
+              {jam}
+            </p>
+          </>
+        );
+      },
+    },
+    {
+      key: "userNama",
+      header: "Nama Pengguna",
+      headerClassName: "w-[240px]",
+      render: (row) => (
+        <>
+          <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-[#131b2e]">
+            {row.userNama}
+          </p>
+          {row.userPeran && (
+            <p className="text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653]">
+              {row.userPeran}
+            </p>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "aksi",
+      header: "Aktivitas",
+      align: "center",
+      headerClassName: "w-[130px]",
+      render: (row) => {
+        const style = AKSI_STYLE[row.aksi];
+        return (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold leading-[14px] tracking-[0.44px]",
+              style.bg,
+              style.text,
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", style.dot)} />
+            {style.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: "judul",
+      header: "Objek / Modul",
+      headerClassName: "min-w-[200px]",
+      cellClassName: "whitespace-normal",
+      render: (row) => {
+        const isHapus = row.aksi === "hapus";
+        return (
+          <>
+            <p
+              className={cn(
+                "text-xs font-semibold leading-4 tracking-[0.24px]",
+                isHapus ? "text-[#444653] line-through" : "text-[#00288e]",
+              )}
+            >
+              {row.judul}
+            </p>
+            <p
+              className={cn(
+                "font-mono text-[11px] font-bold leading-[14px] tracking-[0.44px]",
+                isHapus ? "text-[#757684]" : "text-[#444653]",
+              )}
+            >
+              {row.kode}
+            </p>
+          </>
+        );
+      },
+    },
+    {
+      key: "keterangan",
+      header: "Keterangan",
+      headerClassName: "min-w-[280px]",
+      cellClassName:
+        "whitespace-normal text-sm leading-[22px] text-[#444653]",
+      render: (row) => row.keterangan,
+    },
+  ];
+
   return (
-    <div className={cn("flex w-full flex-col gap-6 bg-[#faf8ff] p-6", className)}>
+    <div
+      className={cn("flex w-full flex-col gap-6 bg-[#faf8ff] p-6", className)}
+    >
       {error && (
         <div className="rounded-xl border border-[#ba1a1a]/30 bg-[#ba1a1a]/5 px-4 py-3 text-sm text-[#ba1a1a]">
           {error}
@@ -347,29 +456,36 @@ export function LogAktivitasPage({ className }: { className?: string }) {
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STAT_CARDS.map(({ key, label, suffix, icon: Icon, iconBg, iconColor }) => (
-          <div
-            key={key}
-            className="flex flex-col justify-between rounded-xl bg-white p-4 shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
-          >
-            <div className="flex items-center justify-between pb-2">
-              <p className="text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]">
-                {label}
-              </p>
-              <div className={cn("flex size-9 items-center justify-center rounded-lg", iconBg)}>
-                <Icon className={cn("size-[18px]", iconColor)} />
+        {STAT_CARDS.map(
+          ({ key, label, suffix, icon: Icon, iconBg, iconColor }) => (
+            <div
+              key={key}
+              className="flex flex-col justify-between rounded-xl bg-white p-4 shadow-[0_1px_1px_rgba(0,0,0,0.05)]"
+            >
+              <div className="flex items-center justify-between pb-2">
+                <p className="text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]">
+                  {label}
+                </p>
+                <div
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-lg",
+                    iconBg,
+                  )}
+                >
+                  <Icon className={cn("size-[18px]", iconColor)} />
+                </div>
               </div>
+              <p className="flex items-baseline gap-2">
+                <span className="text-4xl font-bold leading-9 tracking-[-0.72px] text-[#131b2e]">
+                  {angkaKartu[key]}
+                </span>
+                <span className="text-[11px] font-medium leading-[14px] tracking-[0.44px] text-[#444653]">
+                  {suffix}
+                </span>
+              </p>
             </div>
-            <p className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold leading-9 tracking-[-0.72px] text-[#131b2e]">
-                {angkaKartu[key]}
-              </span>
-              <span className="text-[11px] font-medium leading-[14px] tracking-[0.44px] text-[#444653]">
-                {suffix}
-              </span>
-            </p>
-          </div>
-        ))}
+          ),
+        )}
       </div>
 
       {/* Filter & search toolbar */}
@@ -392,7 +508,10 @@ export function LogAktivitasPage({ className }: { className?: string }) {
               setPage(1);
             }}
           >
-            <SelectTrigger className={selectTriggerClass} aria-label="Filter jenis aktivitas">
+            <SelectTrigger
+              className={selectTriggerClass}
+              aria-label="Filter jenis aktivitas"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -414,7 +533,10 @@ export function LogAktivitasPage({ className }: { className?: string }) {
               setPage(1);
             }}
           >
-            <SelectTrigger className={selectTriggerClass} aria-label="Filter rentang waktu">
+            <SelectTrigger
+              className={selectTriggerClass}
+              aria-label="Filter rentang waktu"
+            >
               <Calendar className="size-4 text-[#757684]" />
               <SelectValue />
             </SelectTrigger>
@@ -438,161 +560,56 @@ export function LogAktivitasPage({ className }: { className?: string }) {
       </div>
 
       {/* Table surface */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-        <Table className="min-w-[1044px]">
-          <TableHeader>
-            <TableRow className="border-0 bg-[#f2f3ff] hover:bg-[#f2f3ff]">
-              <TableHead className={cn(headClass, "w-[128px]")}>Waktu Aktivitas</TableHead>
-              <TableHead className={cn(headClass, "w-[263px]")}>Nama Pengguna</TableHead>
-              <TableHead className={cn(headClass, "w-[112px] text-center")}>Aktivitas</TableHead>
-              <TableHead className={cn(headClass, "min-w-[280px]")}>Data / Arsip</TableHead>
-              <TableHead className={cn(headClass, "min-w-[260px]")}>Keterangan</TableHead>
-            </TableRow>
-          </TableHeader>
-
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="px-6 py-10 text-center text-sm text-[#757684]">
-                  Memuat log aktivitas...
-                </TableCell>
-              </TableRow>
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="px-6 py-10 text-center text-sm text-[#757684]">
-                  Tidak ada aktivitas yang cocok.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((row) => {
-                const { tanggal, jam } = formatTanggal(row.waktu);
-                const style = AKSI_STYLE[row.aksi];
-                const isHapus = row.aksi === "hapus";
-
-                return (
-                  <TableRow key={row.id} className="border-0 hover:bg-[#f2f3ff]/40">
-                    <TableCell className="px-4 py-4 align-middle">
-                      <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-[#131b2e]">
-                        {tanggal}
-                      </p>
-                      <p className="text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653]">
-                        {jam}
-                      </p>
-                    </TableCell>
-
-                    <TableCell className="px-4 py-4 align-middle">
-                      <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-[#131b2e]">
-                        {row.userNama}
-                      </p>
-                      {row.userPeran && (
-                        <p className="text-[11px] font-bold leading-[14px] tracking-[0.44px] text-[#444653]">
-                          {row.userPeran}
-                        </p>
-                      )}
-                    </TableCell>
-
-                    <TableCell className="px-4 py-4 text-center align-middle">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold leading-[14px] tracking-[0.44px]",
-                          style.bg,
-                          style.text,
-                        )}
-                      >
-                        <span className={cn("size-1.5 rounded-full", style.dot)} />
-                        {style.label}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="whitespace-normal px-4 py-4 align-middle">
-                      <p
-                        className={cn(
-                          "text-xs font-semibold leading-4 tracking-[0.24px]",
-                          isHapus ? "text-[#444653] line-through" : "text-[#00288e]",
-                        )}
-                      >
-                        {row.judul}
-                      </p>
-                      <p
-                        className={cn(
-                          "font-mono text-[11px] font-bold leading-[14px] tracking-[0.44px]",
-                          isHapus ? "text-[#757684]" : "text-[#444653]",
-                        )}
-                      >
-                        {row.kode}
-                      </p>
-                    </TableCell>
-
-                    <TableCell className="whitespace-normal p-4 align-middle text-sm leading-[22px] text-[#444653]">
-                      {row.keterangan}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-
-        {/* Pagination */}
-        <div className="flex flex-col gap-3 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13px] leading-[18px] text-[#444653]">
-            Menampilkan{" "}
-            <span className="font-semibold text-[#131b2e]">
-              {from} - {to}
-            </span>{" "}
-            dari <span className="font-semibold text-[#131b2e]">{total}</span> catatan
-            aktivitas
-          </p>
-
-          <nav aria-label="Pagination" className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Halaman sebelumnya"
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="size-8 rounded-lg text-[#757684] hover:bg-[#eaedff] disabled:opacity-40"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-
-            {getPageItems(page, totalPages).map((p, i) =>
-              p === "ellipsis" ? (
-                <span key={`e-${i}`} className="px-1 text-base text-[#757684]">
-                  ...
-                </span>
-              ) : (
-                <Button
-                  key={p}
-                  variant="ghost"
-                  disabled={loading}
-                  onClick={() => setPage(p)}
-                  aria-current={p === page ? "page" : undefined}
-                  className={cn(
-                    "size-8 rounded-lg p-0 text-[11px] font-bold tracking-[0.44px]",
-                    p === page
-                      ? "bg-[#1e40af] text-white hover:bg-[#1e40af] hover:text-white"
-                      : "text-[#131b2e] hover:bg-[#eaedff]",
-                  )}
-                >
-                  {p}
-                </Button>
-              ),
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Halaman berikutnya"
-              disabled={page >= totalPages || loading}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="size-8 rounded-lg text-[#757684] hover:bg-[#eaedff] disabled:opacity-40"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </nav>
-        </div>
-      </div>
+      <DataTable
+        minWidthClassName="min-w-[1044px]"
+        columns={columns}
+        data={items}
+        getRowKey={(row) => row.id}
+        loading={loading}
+        loadingMessage="Memuat log aktivitas..."
+        emptyState={
+          q !== "" || aksi !== "semua" || rentang !== "all"
+            ? {
+                icon: <FileClock className="size-6" aria-hidden />,
+                title: "Tidak ada catatan log pada filter ini",
+                description:
+                  "Coba perluas rentang waktu atau atur ulang filter aktivitas untuk melihat riwayat log lainnya.",
+                action: (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setSearchInput("");
+                      setQ("");
+                      setAksi("semua");
+                      setRentang("all");
+                      setPage(1);
+                    }}
+                    className="h-10 gap-1.5 rounded-lg bg-[#eaedff] px-4 text-xs font-semibold text-[#131b2e] hover:bg-[#dde1ff]"
+                  >
+                    <FilterX className="size-3.5" aria-hidden />
+                    Tampilkan Semua Log
+                  </Button>
+                ),
+              }
+            : {
+                icon: <FileClock className="size-6" aria-hidden />,
+                title: "Belum ada riwayat aktivitas tercatat",
+                description:
+                  "Catatan aktivitas pengguna pada modul Arsip, Tridharma, dan autentikasi akan muncul secara otomatis di sini.",
+              }
+        }
+        pagination={{
+          page,
+          totalPages,
+          from,
+          to,
+          total,
+          itemLabel: "catatan aktivitas",
+          disabled: loading,
+          onPageChange: setPage,
+        }}
+      />
     </div>
   );
 }

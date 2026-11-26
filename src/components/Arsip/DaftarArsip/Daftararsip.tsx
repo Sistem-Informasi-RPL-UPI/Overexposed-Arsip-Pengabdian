@@ -19,15 +19,9 @@ import {
   parseArsipListFilters,
   requireArsipViewer,
 } from "@/lib/arsip";
+import { getArsipPermissions } from "@/lib/rbac";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import DataTable, { type DataTableColumn } from "../DataTable";
 import ExportExcelButton from "./exportexcelbutton";
 import PrintButton from "./Printbutton";
 import DeleteArsipButton from "../DeleteArsipButton";
@@ -107,6 +101,7 @@ async function getKategoriOptions(): Promise<KategoriOption[]> {
 async function getDaftarData(sp: SearchParams) {
   const auth = await requireArsipViewer();
   if (!auth.ok) redirect(auth.response.status === 401 ? "/login" : "/");
+  const { canManageArsip } = getArsipPermissions(auth.session);
 
   const query = new URLSearchParams();
   for (const key of [PARAM.q, PARAM.kategori, PARAM.tahun, PARAM.page]) {
@@ -117,7 +112,13 @@ async function getDaftarData(sp: SearchParams) {
 
   const parsed = parseArsipListFilters(query);
   if (!parsed.ok) {
-    return { rows: [] as Row[], total: 0, page: 1, totalPages: 1 };
+    return {
+      rows: [] as Row[],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+      canManageArsip,
+    };
   }
 
   const { items, pagination } = await listArsipFromView(parsed.filters);
@@ -126,6 +127,7 @@ async function getDaftarData(sp: SearchParams) {
     total: pagination.total,
     page: pagination.page,
     totalPages: pagination.totalPages,
+    canManageArsip,
   };
 }
 
@@ -142,22 +144,27 @@ function buildHref(sp: SearchParams, page: number) {
   return qs ? `${BASE_PATH}?${qs}` : BASE_PATH;
 }
 
-function getPageList(current: number, total: number): (number | "...")[] {
-  const set = new Set<number>(
-    [1, 2, 3, total, current - 1, current, current + 1].filter(
-      (n) => n >= 1 && n <= total
-    )
-  );
-  const sorted = [...set].sort((a, b) => a - b);
-  const out: (number | "...")[] = [];
-  sorted.forEach((n, i) => {
-    if (i > 0 && n - sorted[i - 1] > 1) out.push("...");
-    out.push(n);
-  });
-  return out;
-}
-
 /* ---------- Sub-komponen ---------- */
+
+async function TambahArsipButton() {
+  const auth = await requireArsipViewer();
+  if (!auth.ok || !getArsipPermissions(auth.session).canManageArsip) {
+    return null;
+  }
+
+  return (
+    <Link
+      href="/arsip/daftar/formulir"
+      className={cn(
+        buttonVariants(),
+        "h-auto gap-2 rounded-lg bg-[#00288e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#001f6f]",
+      )}
+    >
+      <Plus className="size-3" aria-hidden />
+      Tambah Arsip
+    </Link>
+  );
+}
 
 function PageHeader() {
   return (
@@ -165,16 +172,9 @@ function PageHeader() {
       <h1 className="text-[28px] font-bold leading-9 tracking-[-0.7px] text-black">
         Daftar Arsip
       </h1>
-      <Link
-        href="/arsip/daftar/formulir"
-        className={cn(
-          buttonVariants(),
-          "h-auto gap-2 rounded-lg bg-[#00288e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#001f6f]"
-        )}
-      >
-        <Plus className="size-3" aria-hidden />
-        Tambah Arsip
-      </Link>
+      <Suspense fallback={null}>
+        <TambahArsipButton />
+      </Suspense>
     </div>
   );
 }
@@ -284,186 +284,161 @@ function TabelArsip({
   page,
   totalPages,
   sp,
+  canManageArsip,
 }: {
   rows: Row[];
   total: number;
   page: number;
   totalPages: number;
   sp: SearchParams;
+  canManageArsip: boolean;
 }) {
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = (page - 1) * PAGE_SIZE + rows.length;
+  const hasFilter = Boolean(
+    first(sp[PARAM.q])?.trim() ||
+      first(sp[PARAM.kategori])?.trim() ||
+      first(sp[PARAM.tahun])?.trim(),
+  );
 
-  return (
-    <section className="overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      {/* Subheader */}
-      <div className="flex items-center justify-between bg-[#f2f3ff] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Table2 className="size-3.5 text-[#00288e]" aria-hidden />
-          <h2 className="text-base font-bold leading-6 text-[#131b2e]">
-            Data Rekapitulasi Berkas Arsip
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportExcelButton rows={rows} />
-          <PrintButton rows={rows} page={page} total={total} />
-        </div>
-      </div>
-
-      {/* Tabel */}
-      <Table className="min-w-240">
-        <TableHeader className="bg-[#f2f3ff] [&_tr]:border-0">
-          <TableRow className="border-0 hover:bg-transparent">
-            {[
-              "Judul Arsip",
-              "Kategori",
-              "No. Berkas / Surat",
-              "Tanggal Arsip",
-              "Aksi",
-            ].map((h, i) => (
-              <TableHead
-                key={h}
+  const columns: DataTableColumn<Row>[] = [
+    {
+      key: "judul",
+      header: "Judul Arsip",
+      headerClassName: "w-100",
+      cellClassName:
+        "whitespace-normal py-5 pr-6 text-sm font-semibold leading-5 text-black",
+      render: (row) => row.judul,
+    },
+    {
+      key: "kategori",
+      header: "Kategori",
+      render: (row) => {
+        const style = kategoriStyle[row.kategori] ?? defaultStyle;
+        return (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
+              style.badge,
+            )}
+          >
+            <span className={cn("size-1.5 rounded-full", style.dot)} />
+            {row.kategori}
+          </span>
+        );
+      },
+    },
+    {
+      key: "noBerkas",
+      header: "No. Berkas / Surat",
+      cellClassName:
+        "text-xs font-semibold uppercase leading-4 tracking-[0.24px] text-black",
+      render: (row) => row.noBerkas,
+    },
+    {
+      key: "tanggal",
+      header: "Tanggal Arsip",
+      headerClassName: "w-27.5 whitespace-normal",
+      cellClassName:
+        "text-xs font-semibold leading-4 tracking-[0.24px] text-black",
+      render: (row) => row.tanggal,
+    },
+    {
+      key: "aksi",
+      header: "Aksi",
+      align: "right",
+      headerClassName: "w-40",
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/arsip/${row.id}`}
+            aria-label={`Lihat ${row.judul}`}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]",
+            )}
+          >
+            <Eye className="size-4" />
+          </Link>
+          {canManageArsip && (
+            <>
+              <Link
+                href={`/arsip/daftar/${row.id}/edit`}
+                aria-label={`Ubah ${row.judul}`}
                 className={cn(
-                  "h-auto px-4 py-5.5 text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
-                  i === 0 && "w-100 pr-6",
-                  i === 3 && "w-27.5 whitespace-normal py-3.5",
-                  i === 4 && "w-40 pr-6 text-right"
+                  buttonVariants({ variant: "ghost", size: "icon" }),
+                  "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]",
                 )}
               >
-                {h}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 && (
-            <TableRow className="border-0 hover:bg-transparent">
-              <TableCell
-                colSpan={5}
-                className="py-12 text-center text-sm text-[#444653]"
-              >
-                Tidak ada arsip yang cocok dengan pencarian atau filter ini.
-              </TableCell>
-            </TableRow>
+                <Pencil className="size-4" />
+              </Link>
+              <DeleteArsipButton id={row.id} judul={row.judul} />
+            </>
           )}
-          {rows.map((row) => {
-            const style = kategoriStyle[row.kategori] ?? defaultStyle;
-            return (
-              <TableRow key={row.id} className="h-15 border-0">
-                <TableCell className="whitespace-normal py-5 pr-6 text-sm font-semibold leading-5 text-black">
-                  {row.judul}
-                </TableCell>
-                <TableCell className="px-4">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
-                      style.badge
-                    )}
-                  >
-                    <span className={cn("size-1.5 rounded-full", style.dot)} />
-                    {row.kategori}
-                  </span>
-                </TableCell>
-                <TableCell className="px-4 text-xs font-semibold uppercase leading-4 tracking-[0.24px] text-black">
-                  {row.noBerkas}
-                </TableCell>
-                <TableCell className="px-4">
-                  <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-black">
-                    {row.tanggal}
-                  </p>
-                </TableCell>
-                <TableCell className="px-6">
-  <div className="flex items-center justify-end gap-1">
-    <Link
-      href={`/arsip/${row.id}`}
-      aria-label={`Lihat ${row.judul}`}
-      className={cn(
-        buttonVariants({ variant: "ghost", size: "icon" }),
-        "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
-      )}
-    >
-      <Eye className="size-4" />
-    </Link>
-    <Link
-  href={`/arsip/daftar/${row.id}/edit`}
-  aria-label={`Ubah ${row.judul}`}
-      className={cn(
-        buttonVariants({ variant: "ghost", size: "icon" }),
-        "size-[27px] text-[#00288e] hover:bg-[#e2e7ff]"
-      )}
-    >
-      <Pencil className="size-4" />
-    </Link>
-    <DeleteArsipButton id={row.id} judul={row.judul} />
-  </div>
-</TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+        </div>
+      ),
+    },
+  ];
 
-      {/* Pagination */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f2f3ff]/70 px-4 py-3.5">
-        <p className="text-[13px] leading-4.5 text-[#444653]">
-          Menampilkan {from}–{to} dari {total} arsip
-        </p>
-        <nav aria-label="Halaman" className="flex items-center gap-1">
-          {page > 1 ? (
-            <Link
-              href={buildHref(sp, page - 1)}
-              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
-            >
-              ‹ Sebelumnya
-            </Link>
-          ) : (
-            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#757684] opacity-50">
-              ‹ Sebelumnya
-            </span>
-          )}
-
-          <div className="flex items-center gap-1 px-1">
-            {getPageList(page, totalPages).map((n, i) =>
-              n === "..." ? (
-                <span
-                  key={`gap-${i}`}
-                  className="w-6 text-center text-[13px] text-[#757684]"
-                >
-                  ...
-                </span>
-              ) : (
+  return (
+    <DataTable
+      icon={<Table2 className="size-4 text-[#00288e]" aria-hidden />}
+      title="Data Rekapitulasi Berkas Arsip"
+      headerActions={
+        <>
+          <ExportExcelButton rows={rows} />
+          <PrintButton rows={rows} page={page} total={total} />
+        </>
+      }
+      columns={columns}
+      data={rows}
+      getRowKey={(row) => row.id}
+      emptyState={
+        hasFilter
+          ? {
+              icon: <Search className="size-6" aria-hidden />,
+              title: "Arsip tidak ditemukan",
+              description:
+                "Tidak ada berkas arsip yang cocok dengan kata kunci atau filter yang dipilih.",
+              action: (
                 <Link
-                  key={n}
-                  href={buildHref(sp, n)}
-                  aria-current={n === page ? "page" : undefined}
+                  href={BASE_PATH}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-[#eaedff] px-4 py-2 text-xs font-semibold text-[#131b2e] hover:bg-[#dde1ff]"
+                >
+                  <RotateCcw className="size-3.5" aria-hidden />
+                  Reset Pencarian & Filter
+                </Link>
+              ),
+            }
+          : {
+              title: "Belum ada berkas arsip di direktori",
+              description: canManageArsip
+                ? "Tambahkan berkas arsip pertama untuk mulai mencatat nomor surat dan jadwal retensi dokumen."
+                : "Belum ada data arsip yang diinput oleh staf program studi.",
+              action: canManageArsip ? (
+                <Link
+                  href="/arsip/daftar/formulir"
                   className={cn(
-                    "flex size-8 items-center justify-center rounded-lg text-xs font-semibold tracking-[0.24px]",
-                    n === page
-                      ? "bg-[#1e40af] text-white"
-                      : "bg-[#eaedff] text-[#131b2e] hover:bg-[#dde1ff]"
+                    buttonVariants(),
+                    "h-auto min-h-[40px] gap-2 rounded-lg bg-[#00288e] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#001f6f]",
                   )}
                 >
-                  {n}
+                  <Plus className="size-3.5" aria-hidden />
+                  Tambah Arsip Pertama
                 </Link>
-              )
-            )}
-          </div>
-
-          {page < totalPages ? (
-            <Link
-              href={buildHref(sp, page + 1)}
-              className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#131b2e] hover:bg-[#dde1ff]"
-            >
-              Selanjutnya ›
-            </Link>
-          ) : (
-            <span className="rounded-lg bg-[#eaedff] px-3 py-1.5 text-[11px] font-bold leading-3.5 tracking-[0.44px] text-[#757684] opacity-50">
-              Selanjutnya ›
-            </span>
-          )}
-        </nav>
-      </div>
-    </section>
+              ) : undefined,
+            }
+      }
+      pagination={{
+        page,
+        totalPages,
+        from,
+        to,
+        total,
+        itemLabel: "arsip",
+        buildHref: (p) => buildHref(sp, p),
+      }}
+    />
   );
 }
 
@@ -489,6 +464,7 @@ async function DaftarArsipContent({
         page={data.page}
         totalPages={data.totalPages}
         sp={sp}
+        canManageArsip={data.canManageArsip}
       />
     </>
   );

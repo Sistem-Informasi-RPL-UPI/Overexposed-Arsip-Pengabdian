@@ -17,15 +17,9 @@ import {
   parseArsipListFilters,
   requireArsipViewer,
 } from "@/lib/arsip";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { getArsipPermissions } from "@/lib/rbac";
+import { buttonVariants } from "@/components/ui/button";
+import DataTable, { type DataTableColumn } from "../DataTable";
 import DeleteArsipButton from "../DeleteArsipButton";
 
 /* ---------- Data ---------- */
@@ -71,17 +65,26 @@ function toRow(a: ArsipItem): Row {
   };
 }
 
-async function getDashboardData(): Promise<{ rows: Row[]; total: number }> {
+async function getDashboardData(): Promise<{
+  rows: Row[];
+  total: number;
+  canManageArsip: boolean;
+}> {
   const auth = await requireArsipViewer();
   if (!auth.ok) redirect(auth.response.status === 401 ? "/login" : "/");
+  const { canManageArsip } = getArsipPermissions(auth.session);
 
   const parsed = parseArsipListFilters(
     new URLSearchParams({ page: "1", pageSize: String(JUMLAH_AKTIVITAS) }),
   );
-  if (!parsed.ok) return { rows: [], total: 0 };
+  if (!parsed.ok) return { rows: [], total: 0, canManageArsip };
 
   const { items, pagination } = await listArsipFromView(parsed.filters);
-  return { rows: items.map(toRow), total: pagination.total };
+  return {
+    rows: items.map(toRow),
+    total: pagination.total,
+    canManageArsip,
+  };
 }
 
 /* ---------- Sub-komponen ---------- */
@@ -147,161 +150,186 @@ function StatCard({ total }: { total: number }) {
   );
 }
 
-function AktivitasTerbaru({ rows, total }: { rows: Row[]; total: number }) {
-  return (
-    <section className="overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-6">
-        <div>
-          <h2 className="text-xl font-semibold leading-7 tracking-[-0.2px] text-[#131b2e]">
-            Aktivitas Terbaru
-          </h2>
-          <p className="text-[13px] leading-4.5 text-[#444653]">
-            Riwayat arsip dan berkas yang baru saja ditambahkan atau diperbarui
-            oleh staf prodi
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/arsip/daftar"
+function AktivitasTerbaru({
+  rows,
+  total,
+  canManageArsip,
+}: {
+  rows: Row[];
+  total: number;
+  canManageArsip: boolean;
+}) {
+  const columns: DataTableColumn<Row>[] = [
+    {
+      key: "judul",
+      header: "Judul Arsip",
+      headerClassName: "w-100",
+      cellClassName:
+        "whitespace-normal py-5 pr-6 text-sm font-semibold leading-5 text-black",
+      render: (row) => row.judul,
+    },
+    {
+      key: "kategori",
+      header: "Kategori",
+      render: (row) => {
+        const style = kategoriStyle[row.kategori] ?? defaultStyle;
+        return (
+          <span
             className={cn(
-              buttonVariants({ variant: "ghost" }),
-              "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]",
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
+              style.badge,
             )}
           >
-            Lihat Seluruh Arsip
-            <ArrowRight className="size-3" aria-hidden />
+            <span className={cn("size-1.5 rounded-full", style.dot)} />
+            {row.kategori}
+          </span>
+        );
+      },
+    },
+    {
+      key: "noBerkas",
+      header: "No. Berkas / Surat",
+      cellClassName:
+        "text-xs font-semibold uppercase leading-4 tracking-[0.24px] text-black",
+      render: (row) => row.noBerkas,
+    },
+    {
+      key: "tanggal",
+      header: "Tanggal Arsip",
+      headerClassName: "w-35 whitespace-normal",
+      cellClassName:
+        "text-xs font-semibold leading-4 tracking-[0.24px] text-black",
+      render: (row) => row.tanggal,
+    },
+    {
+      key: "aksi",
+      header: "Aksi",
+      align: "right",
+      render: (row) => (
+        <div className="flex items-center justify-end gap-1">
+          <Link
+            href={`/arsip/${row.id}`}
+            aria-label={`Lihat ${row.judul}`}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "size-6.75 text-[#00288e] hover:bg-[#e2e7ff]",
+            )}
+          >
+            <Eye className="size-4" />
           </Link>
+          {canManageArsip && (
+            <>
+              <Link
+                href={`/arsip/daftar/${row.id}/edit`}
+                aria-label={`Ubah ${row.judul}`}
+                className={cn(
+                  buttonVariants({ variant: "ghost", size: "icon" }),
+                  "size-6.75 text-[#00288e] hover:bg-[#e2e7ff]",
+                )}
+              >
+                <Pencil className="size-4" />
+              </Link>
+              <DeleteArsipButton id={row.id} judul={row.judul} />
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      data={rows}
+      getRowKey={(row) => row.id}
+      emptyState={{
+        icon: <Folder className="size-6" aria-hidden />,
+        title: "Belum ada berkas arsip yang tercatat",
+        description: canManageArsip
+          ? "Mulai simpan dan kelola naskah dinas atau berkas digital Program Studi RPL di repositori ini."
+          : "Arsip yang ditambahkan oleh staf program studi akan otomatis tampil pada ringkasan aktivitas terbaru ini.",
+        action: canManageArsip ? (
           <Link
             href="/arsip/daftar/formulir"
             className={cn(
               buttonVariants(),
-              "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]",
+              "h-auto min-h-[40px] gap-2 rounded-lg bg-[#1e40af] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]",
             )}
           >
-            <Plus className="size-3" aria-hidden />
-            Tambah Arsip
+            <Plus className="size-3.5" aria-hidden />
+            Tambah Arsip Pertama
           </Link>
-        </div>
-      </div>
-
-      {/* Tabel */}
-      <Table className="min-w-240">
-        <TableHeader className="bg-[#f2f3ff] [&_tr]:border-0">
-          <TableRow className="border-0 hover:bg-transparent">
-            {[
-              "Judul Arsip",
-              "Kategori",
-              "No. Berkas / Surat",
-              "Tanggal Arsip",
-              "Aksi",
-            ].map((h, i) => (
-              <TableHead
-                key={h}
+        ) : undefined,
+      }}
+      topContent={
+        <div className="flex flex-wrap items-center justify-between gap-4 p-6">
+          <div>
+            <h2 className="text-xl font-semibold leading-7 tracking-[-0.2px] text-[#131b2e]">
+              Aktivitas Terbaru
+            </h2>
+            <p className="text-[13px] leading-4.5 text-[#444653]">
+              Riwayat arsip dan berkas yang baru saja ditambahkan atau
+              diperbarui oleh staf prodi
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/arsip/daftar"
+              className={cn(
+                buttonVariants({ variant: "ghost" }),
+                "h-auto gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-[#00288e] hover:bg-[#f2f3ff] hover:text-[#00288e]",
+              )}
+            >
+              Lihat Seluruh Arsip
+              <ArrowRight className="size-3" aria-hidden />
+            </Link>
+            {canManageArsip && (
+              <Link
+                href="/arsip/daftar/formulir"
                 className={cn(
-                  "h-auto px-4 py-5.5 text-xs font-semibold uppercase leading-4 tracking-[0.6px] text-[#444653]",
-                  i === 0 && "w-100 pl-8",
-                  i === 3 && "w-35 whitespace-normal py-3.5",
-                  i === 4 && "pr-6 text-right",
+                  buttonVariants(),
+                  "h-auto gap-2 rounded-lg bg-[#1e40af] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1e3a9f]",
                 )}
               >
-                {h}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 && (
-            <TableRow className="border-0 hover:bg-transparent">
-              <TableCell
-                colSpan={5}
-                className="py-10 text-center text-sm text-[#444653]"
-              >
-                Belum ada arsip. Klik &quot;Tambah Arsip&quot; untuk menambahkan
-                berkas pertama.
-              </TableCell>
-            </TableRow>
-          )}
-          {rows.map((row) => {
-            const style = kategoriStyle[row.kategori] ?? defaultStyle;
-            return (
-              <TableRow key={row.id} className="h-19.25 border-0">
-                <TableCell className="whitespace-normal py-5 pl-8 pr-6 text-sm font-semibold leading-5 text-black">
-                  {row.judul}
-                </TableCell>
-                <TableCell className="px-4">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold leading-3.5 tracking-[0.44px]",
-                      style.badge,
-                    )}
-                  >
-                    <span className={cn("size-1.5 rounded-full", style.dot)} />
-                    {row.kategori}
-                  </span>
-                </TableCell>
-                <TableCell className="px-4 text-xs font-semibold uppercase leading-4 tracking-[0.24px] text-black">
-                  {row.noBerkas}
-                </TableCell>
-                <TableCell className="px-4">
-                  <p className="text-xs font-semibold leading-4 tracking-[0.24px] text-black">
-                    {row.tanggal}
-                  </p>
-                </TableCell>
-                <TableCell className="px-6">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Lihat ${row.judul}`}
-                      className="size-6.75 text-[#00288e] hover:bg-[#e2e7ff]"
-                    >
-                      <Eye className="size-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Ubah ${row.judul}`}
-                      className="size-6.75 text-[#00288e] hover:bg-[#e2e7ff]"
-                    >
-                      <Pencil className="size-4" />
-                    </Button>
-                    <DeleteArsipButton id={row.id} judul={row.judul} />
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-
-      {/* Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f2f3ff]/70 p-4">
-        <p className="text-[13px] leading-4.5 text-[#444653]">
-          Menampilkan {rows.length} aktivitas berkas terbaru dari keseluruhan
-          arsip.
-        </p>
-        <Link
-          href="/arsip/daftar"
-          className="flex items-center gap-2 text-sm font-semibold leading-5 text-[#00288e] hover:underline"
-        >
-          Lihat Semua Daftar Arsip ({total} Arsip)
-          <ArrowRight className="size-3" aria-hidden />
-        </Link>
-      </div>
-    </section>
+                <Plus className="size-3" aria-hidden />
+                Tambah Arsip
+              </Link>
+            )}
+          </div>
+        </div>
+      }
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eaedff] bg-[#f2f3ff]/60 px-6 py-4">
+          <p className="text-[13px] leading-4.5 text-[#444653]">
+            Menampilkan {rows.length} aktivitas berkas terbaru dari keseluruhan
+            arsip.
+          </p>
+          <Link
+            href="/arsip/daftar"
+            className="flex items-center gap-2 text-sm font-semibold leading-5 text-[#00288e] hover:underline"
+          >
+            Lihat Semua Daftar Arsip ({total} Arsip)
+            <ArrowRight className="size-3" aria-hidden />
+          </Link>
+        </div>
+      }
+    />
   );
 }
 
 /* ---------- Bagian yang butuh data (async) ---------- */
 
 async function DashboardData() {
-  const { rows, total } = await getDashboardData();
+  const { rows, total, canManageArsip } = await getDashboardData();
 
   return (
     <>
       <StatCard total={total} />
-      <AktivitasTerbaru rows={rows} total={total} />
+      <AktivitasTerbaru
+        rows={rows}
+        total={total}
+        canManageArsip={canManageArsip}
+      />
     </>
   );
 }
@@ -319,13 +347,11 @@ function DashboardDataSkeleton() {
 
 export default function DashboardPage() {
   return (
-    <div className="flex flex-col gap-2 bg-gray-100 font-(family-name:--font-plus-jakarta)">
-      <div className="flex flex-col gap-6 px-6 pb-6">
-        <Banner />
-        <Suspense fallback={<DashboardDataSkeleton />}>
-          <DashboardData />
-        </Suspense>
-      </div>
+    <div className="flex flex-col gap-6 p-6 font-(family-name:--font-plus-jakarta)">
+      <Banner />
+      <Suspense fallback={<DashboardDataSkeleton />}>
+        <DashboardData />
+      </Suspense>
     </div>
   );
 }

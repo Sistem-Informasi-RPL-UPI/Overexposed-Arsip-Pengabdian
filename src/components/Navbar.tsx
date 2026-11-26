@@ -32,6 +32,7 @@ type BoolPermissionKey = {
 type NavItem = {
   label: string;
   href: string;
+  matchPrefixes?: string[];
   icon: LucideIcon;
   izin?: BoolPermissionKey; // kosong = semua user yang login boleh lihat
 };
@@ -51,24 +52,67 @@ const groups: NavGroup[] = [
   {
     title: "Menu Arsip",
     items: [
-      { label: "Dashboard", href: "/arsip/dashboard", icon: LayoutDashboard, izin: "canViewArsip" },
-      { label: "Daftar Arsip", href: "/arsip/daftar", icon: Inbox, izin: "canViewArsip" },
-      { label: "Kategori", href: "/arsip/kategori", icon: FolderUp, izin: "canViewKategori" },
-      { label: "Log", href: "/arsip/log", icon: ScrollText, izin: "canViewLogAktivitas" },
+      {
+        label: "Dashboard",
+        href: "/arsip/dashboard",
+        icon: LayoutDashboard,
+        izin: "canViewArsip",
+      },
+      {
+        label: "Daftar Arsip",
+        href: "/arsip/daftar",
+        icon: Inbox,
+        izin: "canViewArsip",
+      },
+      {
+        label: "Kategori",
+        href: "/arsip/kategori",
+        icon: FolderUp,
+        izin: "canViewKategori",
+      },
     ],
   },
   {
     title: "Menu Tridharma",
     items: [
-      { label: "Dashboard", href: "/tridharma/dashboard", icon: LayoutDashboard },
+      {
+        label: "Dashboard",
+        href: "/tridharma/dashboard",
+        icon: LayoutDashboard,
+      },
       { label: "Publikasi", href: "/tridharma/publikasi", icon: FileText },
       { label: "Penelitian", href: "/tridharma/penelitian", icon: Microscope },
-      { label: "Pengabdian", href: "/tridharma/pengabdian", icon: HeartHandshake },
+      {
+        label: "Pengabdian",
+        href: "/tridharma/pengabdian",
+        icon: HeartHandshake,
+      },
       { label: "HKI", href: "/tridharma/hki", icon: ClipboardCheck },
       { label: "Buku", href: "/tridharma/buku", icon: BookOpen },
     ],
   },
+  {
+    title: "Menu Sistem",
+    items: [
+      {
+        label: "Log Aktivitas",
+        href: "/log",
+        matchPrefixes: ["/log", "/arsip/log"],
+        icon: ScrollText,
+        izin: "canViewLogAktivitas",
+      },
+    ],
+  },
 ];
+
+function isNavItemActive(pathname: string, item: NavItem): boolean {
+  const prefixes = item.matchPrefixes ?? [item.href];
+  return prefixes.some(
+    (prefix) =>
+      pathname === prefix ||
+      (prefix !== "/" && pathname.startsWith(`${prefix}/`)),
+  );
+}
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
@@ -175,7 +219,10 @@ export function AppSidebar({
           className="flex w-full flex-col gap-2 px-2"
           aria-label="Navigasi utama"
         >
-          <NavLink item={mainItem} active={pathname === mainItem.href} />
+          <NavLink
+            item={mainItem}
+            active={isNavItemActive(pathname, mainItem)}
+          />
 
           {visibleGroups.map((group) => (
             <div key={group.title} className="mt-4 flex flex-col gap-1">
@@ -186,10 +233,7 @@ export function AppSidebar({
                 <NavLink
                   key={item.href}
                   item={item}
-                  active={
-                    pathname === item.href ||
-                    (item.href !== "/" && pathname.startsWith(`${item.href}/`))
-                  }
+                  active={isNavItemActive(pathname, item)}
                 />
               ))}
             </div>
