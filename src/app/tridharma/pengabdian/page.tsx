@@ -6,10 +6,11 @@ import { ChevronLeft, ChevronRight, Download, Eye, HandHeart, Pencil, Plus, Tras
 import { cn } from "@/lib/utils";
 import { getSession } from "@/lib/session";
 import { getTridharmaPermissions, isStaffKaprodiRole, normalizeRole } from "@/lib/rbac";
-import { formatRupiah, formatSinkron, getKegiatanPage, parseKegiatanFilters, type KegiatanFilters } from "@/lib/kegiatan";
+import { formatRupiah, formatSinkron, getKegiatanPage, parseKegiatanFilters, type FilterHalaman } from "@/lib/pengabdian";
 import AktivitasChart from "@/components/Tridharma/Pengabdian/AktivitasChart";
 import { FilterBar, PageSizeSelect } from "@/components/Tridharma/Pengabdian/PengabdianControls";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import EksporKegiatan from "@/components/Tridharma/Pengabdian/EksporKegiatan";
 
 export const metadata: Metadata = {
   title: "Data Pengabdian | Sistem Informasi RPL",
@@ -20,7 +21,7 @@ const card = "rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 // Link halaman dengan filter yang sedang aktif tetap terbawa.
-function hrefHalaman(f: KegiatanFilters, page: number) {
+function hrefHalaman(f: FilterHalaman, page: number) {
   const p = new URLSearchParams();
   if (f.search) p.set("q", f.search);
   if (f.tahun !== null) p.set("tahun", String(f.tahun));
@@ -100,10 +101,15 @@ async function PengabdianContent({ searchParams }: { searchParams: SearchParams 
           </span>
           <span className="flex items-center gap-4">
             <span className="text-[#444653]">Terakhir sinkronisasi: {formatSinkron(data.lastSync)}</span>
-            {/* TODO: ekspor belum ada endpoint-nya. */}
-            <button type="button" className="inline-flex items-center gap-1 text-[#00288e] hover:underline">
-              <Download className="size-3.5" aria-hidden /> Ekspor PDF/Excel
-            </button>
+          <EksporKegiatan
+              jenis="pengabdian"
+              items={data.items.map((k) => ({
+                judul: k.judul,
+                tahun: k.tahun,
+                dana: k.dana,
+                ketua: k.ketua,
+              }))}
+          />
           </span>
         </div>
       </section>

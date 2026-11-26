@@ -2,11 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, GraduationCap, Send, Trash2, User } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ubahPublikasi } from "@/app/tridharma/publikasi/actions";
-
-type Anggota = { tipe: "Dosen" | "Mahasiswa"; nama: string };
+import InputPenulis, { parsePenulis } from "@/components/Tridharma/InputPenulis";
 
 type Payload = {
   judul: string;
@@ -15,7 +14,7 @@ type Payload = {
   jenis: string;
   akreditasi: string;
   doi: string;
-  anggota: Anggota[];
+  penulis: string[]; // urutan sama dengan yang diketik (nama pertama = penulis pertama)
 };
 
 const JENIS = ["Jurnal", "Conference Proceeding", "Prosiding", "Buku Chapter"];
@@ -30,8 +29,8 @@ async function kirimPengajuan(payload: Payload): Promise<{ ok: boolean; pesan: s
 }
 
 const inputClass =
-  "h-11 w-full rounded-lg border-0 bg-[var(--color-tint-primary)] px-4 text-sm text-[var(--color-text-ink)] outline-none placeholder:text-[var(--color-text-muted)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-strong)]/40";
-const cardClass = "rounded-xl bg-[var(--color-bg-surface)] p-6 shadow-sm";
+  "h-11 w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] px-4 text-sm text-[var(--color-text-ink)] outline-none placeholder:text-[var(--color-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-strong)]/40";
+const cardClass = "rounded-xl bg-[var(--color-bg-surface)] p-6 border border-[var(--color-border-strong)] shadow-sm";
 
 function Field({
   id,
@@ -52,7 +51,7 @@ function Field({
         {label} <span className="text-[var(--color-danger-solid)]">*</span>
       </label>
       {children}
-      {hint && <p className="text-xs leading-4 text-[var(--color-text-secondary)]">{hint}</p>}
+      {hint && <p className="text-xs leading-4 text-[var(--color-text-ink)]">{hint}</p>}
     </div>
   );
 }
@@ -78,19 +77,10 @@ export default function FormulirPublikasi({
   awal?: Awal; // ada = mode edit
 }) {
   const modeEdit = awal !== undefined;
-  const [anggota, setAnggota] = React.useState<Anggota[]>([]);
-  const [draftTipe, setDraftTipe] = React.useState<Anggota["tipe"]>("Dosen");
-  const [draftNama, setDraftNama] = React.useState("");
+  // Penulis diketik dalam satu baris, dipisah titik koma. Diawali nama pengaju sebagai penulis pertama.
+  const [penulisTeks, setPenulisTeks] = React.useState(`${ketua.nama}; `);
   const [status, setStatus] = React.useState<{ ok: boolean; pesan: string } | null>(null);
   const [mengirim, setMengirim] = React.useState(false);
-
-  // Satu baris: ketik nama lalu Enter, otomatis masuk ke daftar di bawahnya
-  function tambahAnggota() {
-    const nama = draftNama.trim();
-    if (!nama) return;
-    setAnggota((a) => [...a, { tipe: draftTipe, nama }]);
-    setDraftNama("");
-  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -100,6 +90,12 @@ export default function FormulirPublikasi({
 
     if (!Number.isFinite(tahun) || tahun < 1900 || tahun > 2100) {
       setStatus({ ok: false, pesan: "Tahun terbit harus berupa angka tahun yang valid." });
+      return;
+    }
+
+    const daftarPenulis = parsePenulis(penulisTeks);
+    if (!awal && daftarPenulis.length === 0) {
+      setStatus({ ok: false, pesan: "Isi minimal satu penulis. Pisahkan beberapa penulis dengan titik koma (;)." });
       return;
     }
 
@@ -124,7 +120,7 @@ export default function FormulirPublikasi({
       jenis: get("jenis"),
       akreditasi: get("akreditasi"),
       doi: get("doi"),
-      anggota,
+      penulis: daftarPenulis,
     });
     setStatus(hasil);
     setMengirim(false);
@@ -136,7 +132,7 @@ export default function FormulirPublikasi({
         <h1 className="font-heading text-[28px] font-bold leading-9 tracking-[-0.7px] text-[var(--color-text-ink)]">
           {modeEdit ? "Edit Data Publikasi" : "Formulir Data Publikasi"}
         </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+        <p className="mt-1 text-sm text-[var(--color-text-ink)]">
           {modeEdit
             ? "Perubahan langsung tersimpan dan tampil di daftar publikasi."
             : "Data yang kamu ajukan akan tampil di daftar publikasi setelah disetujui Kaprodi."}
@@ -180,79 +176,10 @@ export default function FormulirPublikasi({
 
       {/* Tim pelaksana (hanya saat tambah baru; saat edit, penulis tidak diubah dari sini) */}
       {!modeEdit && (
-      <section className={cardClass}>
-        <h2 className="font-heading text-xl font-semibold text-[var(--color-text-ink)]">Tim Pelaksana</h2>
-
-        <p className="mt-5 text-sm font-bold text-[var(--color-text-ink)]">Ketua</p>
-        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[var(--color-tint-primary)] px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold leading-5 text-[var(--color-text-ink)]">{ketua.nama}</p>
-            <p className="text-xs leading-4 text-[var(--color-text-secondary)]">
-              {ketua.nip ? `NIP: ${ketua.nip} • ` : ""}
-              {ketua.role}
-            </p>
-          </div>
-          <span className="rounded-full bg-[var(--color-tint-sky)] px-2.5 py-1 text-[11px] font-bold tracking-[0.44px] text-[var(--color-text-ink)]">Penulis 1</span>
-        </div>
-
-        <p className="mt-5 text-sm font-bold text-[var(--color-text-ink)]">
-          Anggota Tim <span className="font-normal text-[var(--color-text-secondary)]">(Dosen/Mahasiswa)</span>
-        </p>
-
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <select
-            aria-label="Jenis anggota"
-            value={draftTipe}
-            onChange={(e) => setDraftTipe(e.target.value as Anggota["tipe"])}
-            className={cn(inputClass, "sm:w-[150px]")}
-          >
-            <option value="Dosen">Dosen</option>
-            <option value="Mahasiswa">Mahasiswa</option>
-          </select>
-          <input
-            aria-label="Nama anggota tim"
-            value={draftNama}
-            onChange={(e) => setDraftNama(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                e.preventDefault(); // jangan kirim formulir
-                tambahAnggota();
-              }
-            }}
-            enterKeyHint="done"
-            placeholder="Ketik nama anggota lalu tekan Enter"
-            className={inputClass}
-          />
-        </div>
-        <p className="mt-1 text-xs leading-4 text-[var(--color-text-secondary)]">Tekan Enter untuk menambahkan. Anggota muncul di daftar di bawah.</p>
-
-        <ul className="mt-3 flex flex-col gap-2">
-          {anggota.map((a, i) => (
-            <li key={`${a.nama}-${i}`} className="flex items-center gap-3 rounded-lg bg-[var(--color-tint-primary)] px-4 py-3">
-              {a.tipe === "Dosen" ? (
-                <User className="size-5 shrink-0 text-[var(--color-primary-strong)]" aria-hidden />
-              ) : (
-                <GraduationCap className="size-5 shrink-0 text-[var(--color-primary-strong)]" aria-hidden />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-5 text-[var(--color-text-ink)]">{a.nama}</p>
-                <p className="text-xs leading-4 text-[var(--color-text-secondary)]">{a.tipe}</p>
-              </div>
-              <span className="rounded-full bg-[var(--color-tint-sky)] px-2.5 py-1 text-[11px] font-bold tracking-[0.44px] text-[var(--color-text-ink)]">
-                Penulis {i + 2}
-              </span>
-              <button
-                type="button"
-                onClick={() => setAnggota((x) => x.filter((_, j) => j !== i))}
-                aria-label={`Hapus anggota ${a.nama}`}
-                className="flex size-8 items-center justify-center rounded-lg text-[var(--color-danger-solid)] hover:bg-[var(--color-bg-surface)]"
-              >
-                <Trash2 className="size-4" aria-hidden />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section className={cardClass}>
+          <h2 className="font-heading text-xl font-semibold text-[var(--color-text-ink)]">Tim Pelaksana</h2>
+          <InputPenulis nilai={penulisTeks} onChange={setPenulisTeks} className={inputClass} />
+        </section>
       )}
 
       {status && (
@@ -265,8 +192,8 @@ export default function FormulirPublikasi({
       )}
 
       {/* Aksi */}
-      <div className="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 bg-[var(--color-bg-surface)] px-6 py-4 shadow-sm">
-        <Link href="/tridharma/publikasi" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-ink)]">
+      <div className="sticky bottom-0 -mx-6 flex items-center justify-between gap-3 border-t border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] px-6 py-4 shadow-sm">
+        <Link href="/tridharma/publikasi" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text-ink)] hover:text-[var(--color-text-ink)]">
           <ArrowLeft className="size-4" aria-hidden />
           Batal / Kembali ke Direktori
         </Link>

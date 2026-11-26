@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getTridharmaPermissions } from "@/lib/rbac";
-import { getKegiatanDetail, getOpsiSkema } from "@/lib/kegiatan";
+import { getKegiatanDetail, getOpsiSkema } from "@/lib/penelitian";
 import FormulirPenelitian from "@/components/Tridharma/Penelitian/FormulirPenelitian";
 
 type SearchParams = Record<string, string | string[] | undefined>;

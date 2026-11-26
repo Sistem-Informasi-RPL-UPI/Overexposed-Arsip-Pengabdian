@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { getKegiatanPage, isJenisKegiatan, parseKegiatanFilters, resolveKegiatanScope } from "@/lib/kegiatan";
+import { getKegiatanPage, isJenisKegiatan, parseKegiatanFilters, resolveKegiatanScope } from "@/lib/pengabdian";
 import { normalisasiNama, parseKegiatanPayload, STATUS_DIAJUKAN } from "@/lib/kegiatan-form";
 import { catatLog } from "@/lib/log-aktivitas";
 import { getTridharmaPermissions } from "@/lib/rbac";

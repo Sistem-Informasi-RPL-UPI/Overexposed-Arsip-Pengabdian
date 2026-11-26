@@ -4,8 +4,11 @@ import type { JenisKegiatan } from "@/generated/prisma/enums";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "@/lib/kegiatan-config";
 import { normalizeRole } from "@/lib/rbac";
 import type { LocalSessionPayload } from "@/lib/sso";
+import EksporKegiatan from "@/components/Tridharma/Pengabdian/EksporKegiatan";
 
-export type KegiatanFilters = {
+// Data untuk halaman Pengabdian. Daftar/detail/opsi kegiatan bersama ada di "@/lib/penelitian".
+
+export type FilterHalaman = {
   search: string;
   tahun: number | null;
   page: number;
@@ -21,7 +24,6 @@ function positiveInt(v: string | undefined): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// Query string -> filter yang sudah aman dipakai ke query.
 export function isJenisKegiatan(v: unknown): v is JenisKegiatan {
   return v === "penelitian" || v === "pengabdian";
 }
@@ -34,7 +36,8 @@ export function resolveKegiatanScope(session: LocalSessionPayload | null) {
   return { role, personal, dosenId, belumTerhubung: personal && dosenId === null };
 }
 
-export function parseKegiatanFilters(sp: RawParams): KegiatanFilters {
+// Query string -> filter yang sudah aman dipakai ke query.
+export function parseKegiatanFilters(sp: RawParams): FilterHalaman {
   const pageSize = positiveInt(first(sp.pageSize));
   return {
     search: (first(sp.q) ?? "").trim().slice(0, 200),
@@ -46,12 +49,11 @@ export function parseKegiatanFilters(sp: RawParams): KegiatanFilters {
 
 /**
  * Data halaman Penelitian / Pengabdian, dibaca dari tabel `kegiatan`.
- * Keduanya satu tabel; yang membedakan kolom `jenis`.
  * - dosenId diisi  -> hanya kegiatan yang anggotanya termasuk dosen itu (Dosen / Kaprodi)
  * - dosenId kosong -> semua kegiatan yang punya anggota dosen terdaftar (role lain)
  * Aturan ini sama dengan getTridharmaDashboard supaya angkanya konsisten.
  */
-export async function getKegiatanPage(jenis: JenisKegiatan, filters: KegiatanFilters, dosenId?: number) {
+export async function getKegiatanPage(jenis: JenisKegiatan, filters: FilterHalaman, dosenId?: number) {
   const personal = dosenId !== undefined;
 
   // Cakupan dasar: dipakai untuk total, grafik, dan opsi filter.

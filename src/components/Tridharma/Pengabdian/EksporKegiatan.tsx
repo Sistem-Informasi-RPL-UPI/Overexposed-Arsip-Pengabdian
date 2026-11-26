@@ -17,25 +17,18 @@ type Props = {
 };
 
 export default function EksporKegiatan({ items, jenis }: Props) {
-  const nama = jenis === "penelitian" ? "Penelitian" : "Pengabdian";
-
-  const formatRupiah = (nilai: number) =>
-    new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      maximumFractionDigits: 0,
-    }).format(nilai);
+  const nama = jenis === "pengabdian" ? "Pengabdian" : "Penelitian";
 
   function eksporExcel() {
-    const data = items.map((k, i) => ({
+    const rows = items.map((k, i) => ({
       "No.": i + 1,
       [`Judul ${nama}`]: k.judul,
-      "Tahun": k.tahun ?? "-",
-      "Ketua": k.ketua ?? "-",
-      "Dana": k.dana,
+      Tahun: k.tahun ?? "-",
+      Ketua: k.ketua ?? "-",
+      Dana: k.dana,
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
+    const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
 
     XLSX.utils.book_append_sheet(workbook, worksheet, nama);
@@ -43,9 +36,7 @@ export default function EksporKegiatan({ items, jenis }: Props) {
   }
 
   function eksporPDF() {
-    const doc = new jsPDF({
-      orientation: "landscape",
-    });
+    const doc = new jsPDF({ orientation: "landscape" });
 
     doc.setFontSize(16);
     doc.text(`Data ${nama}`, 14, 15);
@@ -58,7 +49,11 @@ export default function EksporKegiatan({ items, jenis }: Props) {
         k.judul,
         k.tahun ?? "-",
         k.ketua ?? "-",
-        formatRupiah(k.dana),
+        new Intl.NumberFormat("id-ID", {
+          style: "currency",
+          currency: "IDR",
+          maximumFractionDigits: 0,
+        }).format(k.dana),
       ]),
       styles: {
         fontSize: 9,

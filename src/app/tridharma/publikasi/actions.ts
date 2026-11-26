@@ -51,7 +51,7 @@ function segarkan() {
  */
 export async function hapusPublikasi(publikasiId: number): Promise<HasilAksi> {
   const cek = await cekPemilik(publikasiId);
-  if ("error" in cek) return { ok: false, pesan: cek.error };
+  if (cek.error) return { ok: false, pesan: cek.error };
 
   try {
     await db.$transaction(async (tx) => {
@@ -82,7 +82,7 @@ export async function hapusPublikasi(publikasiId: number): Promise<HasilAksi> {
 /** Ubah data publikasi milik dosen yang login. */
 export async function ubahPublikasi(publikasiId: number, d: DataUbah): Promise<HasilAksi> {
   const cek = await cekPemilik(publikasiId);
-  if ("error" in cek) return { ok: false, pesan: cek.error };
+  if (cek.error) return { ok: false, pesan: cek.error };
 
   const judul = d.judul.trim();
   const jurnal = d.jurnal.trim();
