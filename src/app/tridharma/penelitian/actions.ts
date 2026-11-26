@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { getTridharmaPermissions } from "@/lib/rbac";
 import { catatLog } from "@/lib/log-aktivitas";
+import { md5, normalJudul, susunPenulis } from "@/lib/tridharma-manual";
 
 export type HasilAksi = { ok: boolean; pesan: string };
 
@@ -123,4 +124,116 @@ export async function ubahPenelitian(kegiatanId: number, d: DataUbahPenelitian):
   });
   segarkan();
   return { ok: true, pesan: "Perubahan disimpan." };
+}
+
+export type DataTambahPenelitian = DataUbahPenelitian & { penulis: string[] };
+
+/**
+ * Tambah penelitian secara manual. LANGSUNG tersimpan dan tampil di daftar (tanpa persetujuan Kaprodi).
+ * Nama pertama di daftar penulis dicatat sebagai ketua; pengaju selalu ikut tercatat.
+ * Anggota yang namanya cocok dengan data dosen dihubungkan ke akun dosennya.
+ */
+export async function tambahPenelitian(d: DataTambahPenelitian): Promise<HasilAksi> {
+  const session = await getSession();
+  if (!session) return { ok: false, pesan: "Sesi habis, silakan login lagi." };
+  const perms = getTridharmaPermissions(session);
+  if (!perms.canCreate || session.dosen_id == null) {
+    return { ok: false, pesan: "Hanya Dosen dan Kaprodi yang terhubung ke data dosen yang bisa menambah penelitian." };
+  }
+
+  const judul = d.judul.trim();
+  const skema = d.skema.trim();
+  const sumberDana = d.sumberDana.trim();
+
+  if (!judul || judul.length > 500) return { ok: false, pesan: "Judul wajib diisi (maksimal 500 karakter)." };
+  if (!Number.isInteger(d.tahun) || d.tahun < 1900 || d.tahun > 2100) {
+    return { ok: false, pesan: "Tahun penelitian harus berupa angka tahun yang valid." };
+  }
+  if (!skema || skema.length > 255) return { ok: false, pesan: "Skema wajib diisi (maksimal 255 karakter)." };
+  if (!sumberDana || sumberDana.length > 100) {
+    return { ok: false, pesan: "Sumber pendanaan wajib diisi (maksimal 100 karakter)." };
+  }
+  if (!Number.isFinite(d.dana) || d.dana < 0 || d.dana >= 1e15) {
+    return { ok: false, pesan: "Nilai dana harus berupa angka rupiah 0 atau lebih." };
+  }
+
+  const kunci = md5(`manual|penelitian|${normalJudul(judul)}|${d.tahun}`);
+
+  try {
+    const [semuaDosen, pengaju] = await Promise.all([
+      db.dosen.findMany({ select: { id: true, nama: true, nama_normal: true } }),
+      db.dosen.findUnique({ where: { id: session.dosen_id }, select: { id: true, nama: true, nama_normal: true } }),
+    ]);
+    if (!pengaju) return { ok: false, pesan: "Akun kamu belum terhubung ke data dosen." };
+
+    const tim = susunPenulis(d.penulis, semuaDosen, pengaju, session.name);
+
+    const hasil = await db.$transaction(async (tx) => {
+      const ada = await tx.kegiatan.findUnique({
+        where: { kunci },
+        select: { id: true, anggota: { select: { nama_normal: true, dosen_id: true } } },
+      });
+
+      if (ada && ada.anggota.some((a) => a.dosen_id === pengaju.id)) {
+        return { status: "sudah-ada" as const };
+      }
+
+      const kegiatanId =
+        ada?.id ??
+        (
+          await tx.kegiatan.create({
+            data: {
+              kunci,
+              jenis: "penelitian",
+              judul,
+              tahun: d.tahun,
+              skema,
+              sumber_dana: sumberDana,
+              dana_nominal: d.dana,
+              status: null, // tanpa alur persetujuan
+            },
+            select: { id: true },
+          })
+        ).id;
+
+      // Penelitian yang sudah ada (dibuat pihak lain): hanya anggota baru yang ditambahkan
+      const sudahAda = new Set((ada?.anggota ?? []).map((a) => a.nama_normal));
+      const baris = tim
+        .map((p, i) => ({
+          kegiatan_id: kegiatanId,
+          nama_normal: p.dosen?.nama_normal || p.kunci,
+          nama: p.nama,
+          peran: i === 0 && !ada ? ("ketua" as const) : ("anggota" as const),
+          dosen_id: p.dosen?.id ?? null,
+        }))
+        .filter((r) => !sudahAda.has(r.nama_normal));
+
+      await tx.kegiatanAnggota.createMany({ data: baris, skipDuplicates: true });
+      return { status: ada ? ("digabung" as const) : ("baru" as const) };
+    });
+
+    if (hasil.status === "sudah-ada") {
+      return { ok: false, pesan: "Penelitian dengan judul dan tahun ini sudah ada di daftarmu." };
+    }
+
+    await catatLog({
+      userId: session.sub,
+      userNama: session.name,
+      modul: "7",
+      aksi: "tambah",
+      objek: "dosen",
+      detail: `Penelitian: ${judul}`.slice(0, 500),
+    });
+    segarkan();
+    return {
+      ok: true,
+      pesan:
+        hasil.status === "digabung"
+          ? "Penelitian ini sudah ada di data dosen lain, kamu ditambahkan sebagai anggota."
+          : "Penelitian tersimpan dan langsung tampil di daftar.",
+    };
+  } catch (err) {
+    console.error("Gagal menambah penelitian:", err);
+    return { ok: false, pesan: "Gagal menyimpan penelitian. Coba lagi." };
+  }
 }

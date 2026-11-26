@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ubahPenelitian } from "@/app/tridharma/penelitian/actions";
+import { tambahPenelitian, ubahPenelitian } from "@/app/tridharma/penelitian/actions";
 import InputPenulis, { parsePenulis } from "@/components/Tridharma/InputPenulis";
 
 type Anggota = { tipe: "Dosen" | "Mahasiswa"; nama: string };
@@ -19,16 +20,6 @@ type Awal = {
   anggota: Anggota[];
 };
 
-type Payload = {
-  id?: number; // ada = ubah data, kosong = data baru
-  judul: string;
-  tahun: number;
-  skema: string;
-  sumberDana: string;
-  dana: number;
-  penulis: string[]; // urutan sama dengan yang diketik (nama pertama = penulis pertama)
-};
-
 type Props = {
   ketua: { nama: string; nip: string | null; role: string };
   awal?: Awal; // data yang sudah ada (mode ubah / lihat)
@@ -36,15 +27,6 @@ type Props = {
   opsiSkema: string[];
   backHref: string;
 };
-
-// TODO(backend): penelitian BARU belum bisa disimpan (sama seperti Tambah Publikasi).
-// Data baru harus tersimpan dengan status "Pending" sampai Kaprodi menyetujui, jadi perlu
-// diputuskan dulu tempat menyimpan statusnya dan halaman ACC/Tolak untuk Kaprodi.
-// Mode EDIT (awal ada) sudah tersambung ke server action ubahPenelitian.
-async function kirimPengajuan(payload: Payload): Promise<{ ok: boolean; pesan: string }> {
-  void payload;
-  return { ok: false, pesan: "Penyimpanan belum tersambung ke backend, jadi data belum dikirim." };
-}
 
 const inputClass =
   "h-11 w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] px-4 text-sm text-[var(--color-text-ink)] outline-none placeholder:text-[var(--color-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-strong)]/40 disabled:cursor-default disabled:opacity-100 disabled:text-[var(--color-text-ink)]";
@@ -75,6 +57,7 @@ function Field({
 }
 
 export default function FormulirPenelitian({ ketua, awal, readOnly, opsiSkema, backHref }: Props) {
+  const router = useRouter();
   const modeEdit = awal !== undefined && !readOnly;
   // Saat edit/lihat, anggota tim hanya ditampilkan (perubahan tim belum didukung)
   const timTerkunci = readOnly || modeEdit;
@@ -121,7 +104,7 @@ export default function FormulirPenelitian({ ketua, awal, readOnly, opsiSkema, b
       setMengirim(false);
       return;
     }
-    const hasil = await kirimPengajuan({
+    const hasil = await tambahPenelitian({
       judul: get("judul"),
       tahun,
       skema: get("skema"),
@@ -131,6 +114,10 @@ export default function FormulirPenelitian({ ketua, awal, readOnly, opsiSkema, b
     });
     setStatus(hasil);
     setMengirim(false);
+    if (hasil.ok) {
+      router.push(backHref); // daftar langsung menampilkan data yang baru disimpan
+      router.refresh();
+    }
   }
 
   return (
@@ -143,7 +130,7 @@ export default function FormulirPenelitian({ ketua, awal, readOnly, opsiSkema, b
           <p className="mt-1 text-sm text-[var(--color-text-ink)]">
             {modeEdit
               ? "Perubahan langsung tersimpan dan tampil di daftar penelitian."
-              : "Data yang kamu ajukan akan tampil di daftar penelitian setelah disetujui Kaprodi."}
+              : "Data yang kamu simpan langsung tampil di daftar penelitian."}
           </p>
         )}
       </section>
@@ -278,7 +265,7 @@ export default function FormulirPenelitian({ ketua, awal, readOnly, opsiSkema, b
             disabled={mengirim}
             className="inline-flex h-11 items-center gap-2 rounded-lg bg-[var(--color-primary-strong)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] hover:bg-[var(--color-primary)] disabled:opacity-60"
           >
-            {mengirim ? (modeEdit ? "Menyimpan..." : "Mengirim...") : modeEdit ? "Simpan Perubahan" : "Ajukan Verifikasi"}
+            {mengirim ? "Menyimpan..." : modeEdit ? "Simpan Perubahan" : "Simpan Penelitian"}
             <Send className="size-4" aria-hidden />
           </button>
         )}

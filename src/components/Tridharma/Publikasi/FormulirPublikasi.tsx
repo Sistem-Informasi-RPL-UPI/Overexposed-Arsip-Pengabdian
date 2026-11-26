@@ -2,31 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ubahPublikasi } from "@/app/tridharma/publikasi/actions";
+import { tambahPublikasi, ubahPublikasi } from "@/app/tridharma/publikasi/actions";
 import InputPenulis, { parsePenulis } from "@/components/Tridharma/InputPenulis";
-
-type Payload = {
-  judul: string;
-  tahun: number;
-  jurnal: string;
-  jenis: string;
-  akreditasi: string;
-  doi: string;
-  penulis: string[]; // urutan sama dengan yang diketik (nama pertama = penulis pertama)
-};
 
 const JENIS = ["Jurnal", "Conference Proceeding", "Prosiding", "Buku Chapter"];
 const AKREDITASI = ["Q1", "Q2", "Q3", "Q4", "Sinta 1", "Sinta 2", "Sinta 3", "Sinta 4", "Sinta 5", "Sinta 6", "Belum terakreditasi"];
-
-// TODO(backend): sambungkan ke endpoint penyimpanan (mis. POST /api/tridharma/publikasi).
-// Data dari form ini harus tersimpan dengan status "Pending" sampai Kaprodi menyetujui.
-// Sampai endpoint itu ada, fungsi ini sengaja TIDAK menyimpan apa pun.
-async function kirimPengajuan(payload: Payload): Promise<{ ok: boolean; pesan: string }> {
-  void payload;
-  return { ok: false, pesan: "Penyimpanan belum tersambung ke backend, jadi data belum dikirim." };
-}
 
 const inputClass =
   "h-11 w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-bg-surface)] px-4 text-sm text-[var(--color-text-ink)] outline-none placeholder:text-[var(--color-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-strong)]/40";
@@ -76,6 +59,7 @@ export default function FormulirPublikasi({
   ketua: { nama: string; nip: string | null; role: string };
   awal?: Awal; // ada = mode edit
 }) {
+  const router = useRouter();
   const modeEdit = awal !== undefined;
   // Penulis diketik dalam satu baris, dipisah titik koma. Diawali nama pengaju sebagai penulis pertama.
   const [penulisTeks, setPenulisTeks] = React.useState(`${ketua.nama}; `);
@@ -113,7 +97,7 @@ export default function FormulirPublikasi({
       setMengirim(false);
       return;
     }
-    const hasil = await kirimPengajuan({
+    const hasil = await tambahPublikasi({
       judul: get("judul"),
       tahun,
       jurnal: get("jurnal"),
@@ -124,6 +108,10 @@ export default function FormulirPublikasi({
     });
     setStatus(hasil);
     setMengirim(false);
+    if (hasil.ok) {
+      router.push("/tridharma/publikasi"); // daftar langsung menampilkan data yang baru disimpan
+      router.refresh();
+    }
   }
 
   return (
@@ -135,7 +123,7 @@ export default function FormulirPublikasi({
         <p className="mt-1 text-sm text-[var(--color-text-ink)]">
           {modeEdit
             ? "Perubahan langsung tersimpan dan tampil di daftar publikasi."
-            : "Data yang kamu ajukan akan tampil di daftar publikasi setelah disetujui Kaprodi."}
+            : "Data yang kamu simpan langsung tampil di daftar publikasi."}
         </p>
       </section>
 
@@ -202,7 +190,7 @@ export default function FormulirPublikasi({
           disabled={mengirim}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-[var(--color-primary-strong)] px-5 text-sm font-semibold text-[var(--color-text-inverse)] hover:bg-[var(--color-primary)] disabled:opacity-60"
         >
-          {mengirim ? (modeEdit ? "Menyimpan..." : "Mengirim...") : modeEdit ? "Simpan Perubahan" : "Ajukan Verifikasi"}
+          {mengirim ? "Menyimpan..." : modeEdit ? "Simpan Perubahan" : "Simpan Publikasi"}
           <Send className="size-4" aria-hidden />
         </button>
       </div>
